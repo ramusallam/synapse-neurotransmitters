@@ -1,0 +1,2449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Synapse</title>
+<style>
+  :root {
+    --bg-0: #0a0a0a;
+    --bg-1: #141414;
+    --bg-2: #1e1e1e;
+    --ink-hi: #f5f5f5;
+    --ink-mid: #a0a0a0;
+    --ink-low: #6b7280;
+    --na: #ff7a6b;
+    --k: #5cc9ff;
+    --protein: #b084ff;
+    --atp: #ffd166;
+    --amber: #d4a554;
+    --ca: #4ade80;
+    --nt: #f472b6;
+    --transporter: #5eead4;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+    --panel: #141414;
+    --panel-border: rgba(255,255,255,0.10);
+    --note-bg: #fdf1c6;
+    --note-ink: #2a1e08;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    background: var(--bg-0);
+    color: var(--ink-hi);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  header {
+    padding: 14px 32px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  header .title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--ink-low);
+  }
+  .step-indicator {
+    font-size: 13px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-low);
+    letter-spacing: 1px;
+  }
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 32px 20px;
+  }
+  .handbook-banner {
+    margin: 0 auto 14px;
+    padding: 9px 18px;
+    background: linear-gradient(90deg, rgba(255, 209, 102, 0.08), rgba(244, 114, 182, 0.06));
+    border: 1px solid rgba(255, 209, 102, 0.15);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #cfc5aa;
+  }
+  .handbook-banner .hb-tag {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    padding: 4px 8px;
+    background: rgba(255, 209, 102, 0.18);
+    color: #ffd166;
+    border-radius: 5px;
+  }
+  .handbook-banner strong { color: #ffd166; font-weight: 600; }
+  .stage {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow:
+      0 30px 80px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .phase-bar {
+    padding: 16px 28px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: center;
+    border-top: 1px solid var(--panel-border);
+    background: rgba(5, 8, 20, 0.4);
+  }
+  .phase-name {
+    font-size: 23px;
+    font-weight: 700;
+    letter-spacing: 0.1px;
+    color: var(--accent);
+    transition: color 400ms ease;
+  }
+  .sim-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 250ms ease;
+  }
+  .sim-controls.visible { opacity: 1; pointer-events: auto; }
+  .sim-controls .sim-readout {
+    font-size: 14px;
+    color: var(--ink-mid);
+    letter-spacing: 0.2px;
+    min-width: 180px;
+    text-align: right;
+  }
+  .sim-controls .sim-readout strong {
+    color: var(--nt);
+    font-variant-numeric: tabular-nums;
+    font-size: 16px;
+  }
+  .sim-controls button.sim-btn {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 114, 182, 0.35);
+    background: rgba(244, 114, 182, 0.08);
+    color: #f9a8d4;
+    cursor: pointer;
+    transition: background 150ms, border-color 150ms;
+  }
+  .sim-controls button.sim-btn:hover { background: rgba(244, 114, 182, 0.18); border-color: rgba(244, 114, 182, 0.6); }
+  .sim-controls button.sim-btn.minus {
+    border-color: rgba(94, 234, 212, 0.35);
+    background: rgba(94, 234, 212, 0.08);
+    color: #99f6e4;
+  }
+  .sim-controls button.sim-btn.minus:hover { background: rgba(94, 234, 212, 0.18); border-color: rgba(94, 234, 212, 0.6); }
+  .content { margin-top: 14px; }
+  .notes-card {
+    background: var(--note-bg);
+    color: var(--note-ink);
+    padding: 16px 22px 14px;
+    border-radius: 12px;
+    font-size: 15px;
+    line-height: 1.55;
+    position: relative;
+    box-shadow:
+      0 14px 40px rgba(255, 209, 102, 0.08),
+      inset 0 0 0 1px rgba(0,0,0,0.02);
+  }
+  .step-heading {
+    font-weight: 700;
+    font-size: 16px;
+    color: #7a3a00;
+    margin-bottom: 4px;
+    letter-spacing: 0.2px;
+  }
+  .notes-card p { margin: 0 0 6px; }
+  .notes-card strong { font-weight: 700; color: #2a1e08; }
+
+  /* OBVIOUS notebook prompt — below the yellow box */
+  .notebook-prompt {
+    margin-top: 10px;
+    padding: 12px 16px;
+    background: linear-gradient(90deg, rgba(255, 209, 102, 0.15), rgba(244, 114, 182, 0.12));
+    border: 1.5px solid rgba(255, 209, 102, 0.45);
+    border-left: 5px solid #ffd166;
+    border-radius: 10px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #f3d589;
+  }
+  .notebook-prompt .np-tag {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    padding: 4px 9px;
+    background: #ffd166;
+    color: #2a1e08;
+    border-radius: 5px;
+    margin-top: 1px;
+  }
+  .notebook-prompt strong { color: #ffd166; font-weight: 700; }
+
+  /* NT pathway breakdown widget */
+  .pathway-breakdown {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(122, 86, 0, 0.28);
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .pathway-breakdown .pb-head {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #7a3a00;
+    margin-bottom: 4px;
+  }
+  .nt-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    text-align: left;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(122, 58, 0, 0.18);
+    border-left: 4px solid var(--pc-color, #ccc);
+    border-radius: 8px;
+    font-family: inherit;
+    color: #2a1e08;
+    cursor: pointer;
+    transition: background 150ms, border-color 150ms, box-shadow 150ms;
+    width: 100%;
+  }
+  .nt-card:hover { background: rgba(255,255,255,0.78); }
+  .nt-card .pc-num {
+    font-size: 11px;
+    font-weight: 800;
+    background: var(--pc-color, #ccc);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 11px;
+    flex-shrink: 0;
+    margin-top: 1px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .nt-card .pc-body { flex: 1; min-width: 0; }
+  .nt-card .pc-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: #7a3a00;
+  }
+  .nt-card .pc-reveal {
+    font-size: 12px;
+    font-style: italic;
+    color: #8a6100;
+    margin-top: 2px;
+  }
+  .nt-card .pc-content {
+    display: none;
+    font-size: 13px;
+    line-height: 1.55;
+    margin-top: 6px;
+    color: #2a1e08;
+  }
+  .nt-card.revealed {
+    background: rgba(255,255,255,0.92);
+    border-left-width: 6px;
+  }
+  .nt-card.revealed .pc-reveal { display: none; }
+  .nt-card.revealed .pc-content { display: block; animation: pcFade 250ms ease; }
+  @keyframes pcFade { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+  .pb-progress {
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #7a3a00;
+  }
+  .pb-bar {
+    height: 5px;
+    background: rgba(122, 58, 0, 0.12);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 5px;
+  }
+  .pb-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #ffd166, #f472b6, #b084ff, #5cc9ff, #4ade80, #ff7a6b);
+    transition: width 300ms ease;
+  }
+  .pb-text.complete { color: #0f5b3f; }
+
+  nav {
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  button {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    color: var(--ink-hi);
+    cursor: pointer;
+    transition: background 150ms, transform 50ms, border-color 150ms;
+  }
+  button:hover:not(:disabled) {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.15);
+  }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: 0.3; cursor: not-allowed; }
+  button.primary {
+    background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+    color: #f5f5ff;
+    border-color: rgba(99, 102, 241, 0.55);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.25);
+  }
+  button.primary:hover { filter: brightness(1.08); }
+  .btn-group { display: flex; gap: 10px; }
+  @media (max-width: 720px) {
+    .phase-bar { grid-template-columns: 1fr; }
+    .sim-controls { justify-content: space-between; }
+    .phase-name { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="title">The Synapse</div>
+  <div class="step-indicator" id="stepIndicator">01 / 11</div>
+</header>
+
+<main>
+  <div class="handbook-banner">
+    <div class="hb-tag">3b. LECTURE</div>
+    <div>Follow along in your <strong>3b. Synapse</strong> notes. For each step: <strong>label it</strong>, <strong>copy the yellow box</strong>, and <strong>draw a simple diagram</strong>. Use <strong>color</strong>.</div>
+  </div>
+  <div class="stage">
+    <canvas id="canvas" width="1600" height="650"></canvas>
+    <div class="phase-bar">
+      <div class="phase-name" id="phaseName">Step 1: The Neuron</div>
+      <div class="sim-controls" id="simControls">
+        <button class="sim-btn minus" id="ntMinusBtn">− Remove NTs</button>
+        <button class="sim-btn" id="ntPlusBtn">+ Add NTs</button>
+        <div class="sim-readout" id="simReadout">NTs in cleft: <strong>20</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="notes-card">
+      <div class="step-heading" id="stepHeading">Step 1: The Neuron</div>
+      <p id="notes"></p>
+    </div>
+    <div class="notebook-prompt" id="notebookPrompt">
+      <div class="np-tag">✎ NOTES</div>
+      <div id="notebookText">Sketch the neuron in your notes and label every part you see.</div>
+    </div>
+  </div>
+
+  <nav>
+    <button id="resetBtn">Start Over</button>
+    <div class="btn-group">
+      <button id="prevBtn">← Back</button>
+      <button id="nextBtn" class="primary">Next →</button>
+    </div>
+  </nav>
+</main>
+
+<script>
+// =====================================================
+//  Canvas setup
+// =====================================================
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const W = canvas.width;   // 1600
+const H = canvas.height;  // 650
+const MID = H / 2;
+
+// Synapse layout constants
+const PRE_LEFT = 60;
+const PRE_RIGHT = 740;     // presynaptic membrane (right edge facing cleft)
+const POST_LEFT = 900;     // postsynaptic membrane (left edge facing cleft)
+const POST_RIGHT = W - 60;
+const CLEFT_MID = (PRE_RIGHT + POST_LEFT) / 2;
+const SYN_TOP = 80;
+const SYN_BOT = H - 80;
+
+// colors
+const C_NA = '#ff7a6b';
+const C_K = '#5cc9ff';
+const C_PROT = '#b084ff';
+const C_ATP = '#ffd166';
+const C_AMBER = '#d4a554';
+const C_ACCENT = '#6366f1';
+const C_CA = '#4ade80';
+const C_CA_GLOW = 'rgba(74, 222, 128,';
+const C_NT = '#f472b6';
+const C_NT_GLOW = 'rgba(244, 114, 182,';
+const C_TRANS = '#5eead4';
+
+// =====================================================
+//  Utilities
+// =====================================================
+function lerp(a, b, t) { return a + (b - a) * t; }
+function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function seededRng(seed) {
+  let s = seed;
+  return function() { s = (s * 16807) % 2147483647; return s / 2147483647; };
+}
+
+function buildDendriteTree(x0, y0, angle, length, depth, rng, segments = []) {
+  if (depth === 0 || length < 18) return segments;
+  const endX = x0 + Math.cos(angle) * length;
+  const endY = y0 + Math.sin(angle) * length;
+  const cpX = x0 + Math.cos(angle) * length * 0.5 + (rng() - 0.5) * 30;
+  const cpY = y0 + Math.sin(angle) * length * 0.5 + (rng() - 0.5) * 30;
+  segments.push({ x1: x0, y1: y0, cx: cpX, cy: cpY, x2: endX, y2: endY, w: depth * 2 });
+  const branchAngle = 0.45 + rng() * 0.3;
+  const lenScale = 0.6 + rng() * 0.15;
+  buildDendriteTree(endX, endY, angle - branchAngle, length * lenScale, depth - 1, rng, segments);
+  buildDendriteTree(endX, endY, angle + branchAngle, length * lenScale, depth - 1, rng, segments);
+  if (rng() > 0.6) {
+    buildDendriteTree(endX, endY, angle + (rng() - 0.5) * 0.3, length * 0.5, depth - 1, rng, segments);
+  }
+  return segments;
+}
+
+// =====================================================
+//  Draw the full neuron (matches Action Potential app)
+// =====================================================
+function drawFullNeuron(ctx, opts = {}) {
+  const rng = seededRng(7);
+  const soma = { x: 340, y: MID };
+  const trees = [
+    buildDendriteTree(soma.x - 70, soma.y - 85, -Math.PI * 0.72, 130, 4, rng),
+    buildDendriteTree(soma.x - 95, soma.y - 35, -Math.PI * 0.92, 120, 4, rng),
+    buildDendriteTree(soma.x - 98, soma.y + 25, Math.PI * 0.94, 120, 4, rng),
+    buildDendriteTree(soma.x - 70, soma.y + 85, Math.PI * 0.72, 130, 4, rng),
+    buildDendriteTree(soma.x - 30, soma.y - 100, -Math.PI * 0.55, 110, 3, rng),
+    buildDendriteTree(soma.x - 30, soma.y + 100, Math.PI * 0.55, 110, 3, rng)
+  ];
+  ctx.lineCap = 'round';
+  trees.forEach(tree => {
+    tree.forEach(seg => {
+      ctx.strokeStyle = `rgba(209, 154, 143, ${0.55 + seg.w * 0.05})`;
+      ctx.lineWidth = seg.w;
+      ctx.beginPath();
+      ctx.moveTo(seg.x1, seg.y1);
+      ctx.quadraticCurveTo(seg.cx, seg.cy, seg.x2, seg.y2);
+      ctx.stroke();
+    });
+  });
+  // soma glow
+  const glow = ctx.createRadialGradient(soma.x, soma.y, 0, soma.x, soma.y, 180);
+  glow.addColorStop(0, 'rgba(245, 208, 197, 0.16)');
+  glow.addColorStop(1, 'rgba(245, 208, 197, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(soma.x, soma.y, 180, 0, Math.PI * 2); ctx.fill();
+  // soma blob
+  const somaFill = ctx.createRadialGradient(soma.x - 25, soma.y - 25, 10, soma.x, soma.y, 120);
+  somaFill.addColorStop(0, '#f8d9ce');
+  somaFill.addColorStop(0.7, '#d49a8d');
+  somaFill.addColorStop(1, '#a86456');
+  ctx.fillStyle = somaFill;
+  ctx.beginPath();
+  ctx.moveTo(soma.x - 95, soma.y + 5);
+  ctx.bezierCurveTo(soma.x - 100, soma.y - 70, soma.x - 30, soma.y - 105, soma.x + 25, soma.y - 95);
+  ctx.bezierCurveTo(soma.x + 85, soma.y - 85, soma.x + 110, soma.y - 30, soma.x + 105, soma.y + 5);
+  ctx.bezierCurveTo(soma.x + 110, soma.y + 50, soma.x + 60, soma.y + 95, soma.x + 5, soma.y + 100);
+  ctx.bezierCurveTo(soma.x - 55, soma.y + 105, soma.x - 95, soma.y + 65, soma.x - 95, soma.y + 5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(140, 75, 60, 0.7)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // nucleus
+  ctx.fillStyle = '#8f4c3e';
+  ctx.beginPath();
+  ctx.arc(soma.x - 8, soma.y - 8, 36, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#5a2a1e';
+  ctx.beginPath();
+  ctx.arc(soma.x + 2, soma.y - 2, 11, 0, Math.PI * 2);
+  ctx.fill();
+  // axon hillock
+  ctx.fillStyle = '#d49a8d';
+  ctx.beginPath();
+  ctx.moveTo(soma.x + 95, soma.y - 28);
+  ctx.lineTo(soma.x + 95, soma.y + 28);
+  ctx.lineTo(soma.x + 170, soma.y + 14);
+  ctx.lineTo(soma.x + 170, soma.y - 14);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(140, 75, 60, 0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // axon
+  ctx.strokeStyle = '#d49a8d';
+  ctx.lineWidth = 28;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(soma.x + 170, soma.y);
+  ctx.bezierCurveTo(soma.x + 430, soma.y - 14, soma.x + 760, soma.y + 14, W - 260, soma.y);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255, 220, 208, 0.35)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(soma.x + 170, soma.y - 9);
+  ctx.bezierCurveTo(soma.x + 430, soma.y - 23, soma.x + 760, soma.y + 5, W - 260, soma.y - 9);
+  ctx.stroke();
+  // terminals
+  const termX = W - 260;
+  const termAngles = [-0.55, -0.28, -0.05, 0.22, 0.5, -0.42, 0.38];
+  const terminals = [];
+  termAngles.forEach((a, i) => {
+    const len = 120 + (i % 3) * 20;
+    ctx.strokeStyle = '#d49a8d';
+    ctx.lineWidth = 10 + (i % 2) * 3;
+    ctx.beginPath();
+    ctx.moveTo(termX, soma.y);
+    const mx = termX + Math.cos(a) * len * 0.55;
+    const my = soma.y + Math.sin(a) * len * 0.55 + (i % 2 === 0 ? 8 : -8);
+    const ex = termX + Math.cos(a) * len;
+    const ey = soma.y + Math.sin(a) * len;
+    ctx.quadraticCurveTo(mx, my, ex, ey);
+    ctx.stroke();
+    const bg = ctx.createRadialGradient(ex - 3, ey - 3, 2, ex, ey, 18);
+    bg.addColorStop(0, '#fae2d4');
+    bg.addColorStop(1, '#c78373');
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.arc(ex, ey, 14 + (i % 3) * 2, 0, Math.PI * 2);
+    ctx.fill();
+    terminals.push({ x: ex, y: ey, r: 14 + (i % 3) * 2, angle: a });
+  });
+  return { soma, terminals, termX };
+}
+
+// =====================================================
+//  Synapse stage drawing
+// =====================================================
+// presynaptic terminal blob (left side)
+function drawPresynapticTerminal(ctx, opts = {}) {
+  // organic blob shape, right edge serves as the membrane facing the cleft
+  const cx = (PRE_LEFT + PRE_RIGHT) / 2;
+  const cy = MID;
+  // glow
+  const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 460);
+  glow.addColorStop(0, 'rgba(245, 208, 197, 0.10)');
+  glow.addColorStop(1, 'rgba(245, 208, 197, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(cx, cy, 460, 0, Math.PI * 2); ctx.fill();
+  // body fill
+  const fill = ctx.createLinearGradient(PRE_LEFT, 0, PRE_RIGHT, 0);
+  fill.addColorStop(0, '#a86456');
+  fill.addColorStop(0.4, '#c78373');
+  fill.addColorStop(1, '#d49a8d');
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  // presynaptic outline: rounded on left, slightly bulging on right with subtle wave
+  ctx.moveTo(PRE_LEFT, SYN_TOP);
+  ctx.lineTo(PRE_RIGHT - 18, SYN_TOP);
+  // right edge — gentle wave to feel organic
+  ctx.bezierCurveTo(PRE_RIGHT + 6, SYN_TOP + 80, PRE_RIGHT - 8, MID - 20, PRE_RIGHT + 4, MID);
+  ctx.bezierCurveTo(PRE_RIGHT - 8, MID + 20, PRE_RIGHT + 6, SYN_BOT - 80, PRE_RIGHT - 18, SYN_BOT);
+  ctx.lineTo(PRE_LEFT, SYN_BOT);
+  ctx.closePath();
+  ctx.fill();
+  // membrane (right edge, the lipid bilayer facing cleft)
+  ctx.strokeStyle = 'rgba(212, 165, 84, 0.85)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(PRE_RIGHT - 18, SYN_TOP);
+  ctx.bezierCurveTo(PRE_RIGHT + 6, SYN_TOP + 80, PRE_RIGHT - 8, MID - 20, PRE_RIGHT + 4, MID);
+  ctx.bezierCurveTo(PRE_RIGHT - 8, MID + 20, PRE_RIGHT + 6, SYN_BOT - 80, PRE_RIGHT - 18, SYN_BOT);
+  ctx.stroke();
+  // outline (left + top + bottom)
+  ctx.strokeStyle = 'rgba(140, 75, 60, 0.55)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(PRE_LEFT, SYN_TOP);
+  ctx.lineTo(PRE_RIGHT - 18, SYN_TOP);
+  ctx.moveTo(PRE_LEFT, SYN_BOT);
+  ctx.lineTo(PRE_RIGHT - 18, SYN_BOT);
+  ctx.moveTo(PRE_LEFT, SYN_TOP);
+  ctx.lineTo(PRE_LEFT, SYN_BOT);
+  ctx.stroke();
+  // axon trailing in from far left (so students see this is the END of the axon)
+  ctx.strokeStyle = '#d49a8d';
+  ctx.lineWidth = 28;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, MID);
+  ctx.lineTo(PRE_LEFT + 20, MID);
+  ctx.stroke();
+}
+
+// postsynaptic dendrite (right side)
+function drawPostsynapticDendrite(ctx, opts = {}) {
+  const cx = (POST_LEFT + POST_RIGHT) / 2;
+  const cy = MID;
+  const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 460);
+  glow.addColorStop(0, 'rgba(176, 132, 255, 0.10)');
+  glow.addColorStop(1, 'rgba(176, 132, 255, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(cx, cy, 460, 0, Math.PI * 2); ctx.fill();
+  const fill = ctx.createLinearGradient(POST_LEFT, 0, POST_RIGHT, 0);
+  fill.addColorStop(0, '#b89cd6');
+  fill.addColorStop(0.5, '#9a7fc0');
+  fill.addColorStop(1, '#7a5ea3');
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.moveTo(POST_RIGHT, SYN_TOP);
+  ctx.lineTo(POST_LEFT + 18, SYN_TOP);
+  ctx.bezierCurveTo(POST_LEFT - 6, SYN_TOP + 80, POST_LEFT + 8, MID - 20, POST_LEFT - 4, MID);
+  ctx.bezierCurveTo(POST_LEFT + 8, MID + 20, POST_LEFT - 6, SYN_BOT - 80, POST_LEFT + 18, SYN_BOT);
+  ctx.lineTo(POST_RIGHT, SYN_BOT);
+  ctx.closePath();
+  ctx.fill();
+  // membrane facing cleft
+  ctx.strokeStyle = 'rgba(212, 165, 84, 0.85)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(POST_LEFT + 18, SYN_TOP);
+  ctx.bezierCurveTo(POST_LEFT - 6, SYN_TOP + 80, POST_LEFT + 8, MID - 20, POST_LEFT - 4, MID);
+  ctx.bezierCurveTo(POST_LEFT + 8, MID + 20, POST_LEFT - 6, SYN_BOT - 80, POST_LEFT + 18, SYN_BOT);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(90, 60, 130, 0.55)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(POST_LEFT + 18, SYN_TOP);
+  ctx.lineTo(POST_RIGHT, SYN_TOP);
+  ctx.moveTo(POST_LEFT + 18, SYN_BOT);
+  ctx.lineTo(POST_RIGHT, SYN_BOT);
+  ctx.moveTo(POST_RIGHT, SYN_TOP);
+  ctx.lineTo(POST_RIGHT, SYN_BOT);
+  ctx.stroke();
+  // dendrite branch trailing off to the right
+  ctx.strokeStyle = '#9a7fc0';
+  ctx.lineWidth = 36;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(POST_RIGHT - 10, MID);
+  ctx.lineTo(W, MID);
+  ctx.stroke();
+}
+
+// Helper: get x coordinate of presynaptic membrane at a given y (curved)
+function preMembraneX(y) {
+  // approximate the bezier curve linearly per segment
+  const top = SYN_TOP, mid = MID, bot = SYN_BOT;
+  if (y <= mid) {
+    const t = (y - top) / (mid - top);
+    // peak around mid
+    return PRE_RIGHT + Math.sin(t * Math.PI) * 12 - 18 * (1 - t) * (1 - t);
+  } else {
+    const t = (y - mid) / (bot - mid);
+    return PRE_RIGHT + Math.sin((1 - t) * Math.PI) * 12 - 18 * t * t;
+  }
+}
+function postMembraneX(y) {
+  const top = SYN_TOP, mid = MID, bot = SYN_BOT;
+  if (y <= mid) {
+    const t = (y - top) / (mid - top);
+    return POST_LEFT - Math.sin(t * Math.PI) * 12 + 18 * (1 - t) * (1 - t);
+  } else {
+    const t = (y - mid) / (bot - mid);
+    return POST_LEFT - Math.sin((1 - t) * Math.PI) * 12 + 18 * t * t;
+  }
+}
+
+// Calcium channel (voltage-gated) along presynaptic membrane
+function drawCalciumChannel(ctx, y, openness) {
+  const x = preMembraneX(y);
+  const halfH = 28;
+  ctx.save();
+  // pore base
+  const grad = ctx.createLinearGradient(x - 18, y, x + 18, y);
+  grad.addColorStop(0, 'rgba(20, 30, 25, 0.95)');
+  grad.addColorStop(0.5, 'rgba(15, 25, 20, 0.98)');
+  grad.addColorStop(1, 'rgba(20, 30, 25, 0.95)');
+  ctx.fillStyle = grad;
+  roundRect(ctx, x - 22, y - halfH, 44, halfH * 2, 8);
+  ctx.fill();
+  ctx.strokeStyle = openness > 0.3 ? C_CA : 'rgba(120, 200, 150, 0.4)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // gates (lips)
+  const gap = openness * 14;
+  ctx.fillStyle = openness > 0.3 ? `rgba(74, 222, 128, ${0.5 + openness * 0.4})` : 'rgba(74, 222, 128, 0.25)';
+  // top lip
+  ctx.beginPath();
+  ctx.ellipse(x - 12 + gap, y - halfH + 10, 8, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // bottom lip
+  ctx.beginPath();
+  ctx.ellipse(x + 12 - gap, y + halfH - 10, 8, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // label
+  ctx.fillStyle = 'rgba(74, 222, 128, 0.95)';
+  ctx.font = '700 11px -apple-system, system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('Ca²⁺', x, y);
+  ctx.restore();
+}
+
+// Receptor on postsynaptic membrane (binding site for NTs)
+function drawReceptor(ctx, y, boundFraction) {
+  const x = postMembraneX(y);
+  ctx.save();
+  // base
+  ctx.fillStyle = 'rgba(50, 30, 80, 0.95)';
+  roundRect(ctx, x - 6, y - 32, 32, 64, 8);
+  ctx.fill();
+  // funnel — opens when bound
+  const open = boundFraction;
+  ctx.strokeStyle = `rgba(176, 132, 255, ${0.55 + open * 0.4})`;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x - 4, y - 30);
+  ctx.lineTo(x + 14 - open * 8, y - 4);
+  ctx.lineTo(x + 14 - open * 8, y + 4);
+  ctx.lineTo(x - 4, y + 30);
+  ctx.stroke();
+  // glow when bound
+  if (open > 0.1) {
+    const g = ctx.createRadialGradient(x + 6, y, 0, x + 6, y, 30);
+    g.addColorStop(0, `rgba(176, 132, 255, ${open * 0.5})`);
+    g.addColorStop(1, 'rgba(176, 132, 255, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x + 6, y, 30, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Reuptake transporter on presynaptic membrane (pulls NTs back in)
+function drawTransporter(ctx, y, active) {
+  const x = preMembraneX(y);
+  ctx.save();
+  // base
+  ctx.fillStyle = 'rgba(20, 50, 50, 0.95)';
+  roundRect(ctx, x - 22, y - 26, 28, 52, 6);
+  ctx.fill();
+  ctx.strokeStyle = active > 0.3 ? C_TRANS : 'rgba(94, 234, 212, 0.4)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // pump arrow
+  ctx.fillStyle = active > 0.3 ? `rgba(94, 234, 212, ${0.7 + active * 0.3})` : 'rgba(94, 234, 212, 0.4)';
+  ctx.beginPath();
+  ctx.moveTo(x - 12, y - 8);
+  ctx.lineTo(x - 4, y - 8);
+  ctx.lineTo(x - 4, y - 14);
+  ctx.lineTo(x + 4, y);
+  ctx.lineTo(x - 4, y + 14);
+  ctx.lineTo(x - 4, y + 8);
+  ctx.lineTo(x - 12, y + 8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+// Vesicle — sphere full of NT dots
+function drawVesicle(ctx, x, y, r, fuseFraction) {
+  ctx.save();
+  if (fuseFraction >= 1) { ctx.restore(); return; } // fully fused, gone
+  const fade = 1 - fuseFraction;
+  ctx.globalAlpha = fade;
+  // outer shell
+  const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, 0, x, y, r);
+  g.addColorStop(0, 'rgba(255, 245, 220, 0.95)');
+  g.addColorStop(0.7, 'rgba(255, 220, 170, 0.7)');
+  g.addColorStop(1, 'rgba(212, 165, 84, 0.5)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, r * (1 + fuseFraction * 0.3), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 209, 102, 0.85)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // little NT dots inside
+  ctx.fillStyle = C_NT;
+  for (let i = 0; i < 5; i++) {
+    const a = i * 1.25;
+    const rr = r * 0.5;
+    ctx.beginPath();
+    ctx.arc(x + Math.cos(a) * rr, y + Math.sin(a) * rr, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// =====================================================
+//  Particle classes
+// =====================================================
+class NT {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.vx = (Math.random() - 0.5) * 0.6;
+    this.vy = (Math.random() - 0.5) * 0.6;
+    this.r = 7;
+    this.state = 'free'; // free, bound, transitTo, reuptake, recycled
+    this.bondT = 0;
+    this.target = null;
+    this.pathT = 0;
+    this.pathSpeed = 0;
+    this.pathStart = null;
+    this.pathEnd = null;
+    this.boundReceptor = null;
+    this.life = 1;
+    this.trail = [];
+  }
+  update(dt) {
+    this.trail.unshift({ x: this.x, y: this.y });
+    if (this.trail.length > 6) this.trail.pop();
+    if (this.state === 'transitTo') {
+      this.pathT += this.pathSpeed * dt;
+      if (this.pathT >= 1) {
+        this.pathT = 1;
+        this.x = this.pathEnd.x; this.y = this.pathEnd.y;
+        if (this.target === 'receptor' && this.boundReceptor) {
+          this.state = 'bound';
+          this.bondT = 0;
+        } else if (this.target === 'reuptake') {
+          this.state = 'recycled';
+        } else {
+          this.state = 'free';
+          this.vx = (Math.random() - 0.5) * 1.0;
+          this.vy = (Math.random() - 0.5) * 1.0;
+        }
+        return;
+      }
+      // ease the path
+      const t = this.pathT;
+      const ease = t * t * (3 - 2 * t);
+      this.x = lerp(this.pathStart.x, this.pathEnd.x, ease);
+      this.y = lerp(this.pathStart.y, this.pathEnd.y, ease);
+      return;
+    }
+    if (this.state === 'bound') {
+      this.bondT += dt;
+      return;
+    }
+    if (this.state === 'recycled') return;
+    // free — drift across cleft area with bias toward receptors
+    this.vx += (Math.random() - 0.5) * 0.18;
+    this.vy += (Math.random() - 0.5) * 0.18;
+    this.vx *= 0.95;
+    this.vy *= 0.95;
+    const sp = Math.hypot(this.vx, this.vy);
+    if (sp > 1.0) { this.vx = this.vx / sp * 1.0; this.vy = this.vy / sp * 1.0; }
+    this.x += this.vx;
+    this.y += this.vy;
+    // confine to cleft
+    if (this.y < SYN_TOP + 20) { this.y = SYN_TOP + 20; this.vy = Math.abs(this.vy); }
+    if (this.y > SYN_BOT - 20) { this.y = SYN_BOT - 20; this.vy = -Math.abs(this.vy); }
+    const minX = preMembraneX(this.y) + this.r + 4;
+    const maxX = postMembraneX(this.y) - this.r - 4;
+    if (this.x < minX) { this.x = minX; this.vx = Math.abs(this.vx); }
+    if (this.x > maxX) { this.x = maxX; this.vx = -Math.abs(this.vx); }
+  }
+  setTransit(end, speed, target, receptor) {
+    this.state = 'transitTo';
+    this.pathStart = { x: this.x, y: this.y };
+    this.pathEnd = end;
+    this.pathT = 0;
+    this.pathSpeed = speed;
+    this.target = target;
+    this.boundReceptor = receptor || null;
+  }
+  draw(ctx) {
+    if (this.state === 'recycled') return;
+    ctx.save();
+    // trail
+    for (let i = this.trail.length - 1; i > 0; i--) {
+      const p = this.trail[i];
+      const a = (1 - i / this.trail.length) * 0.18;
+      ctx.fillStyle = C_NT_GLOW + a + ')';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, this.r * 0.85, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // glow
+    const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r * 2.4);
+    g.addColorStop(0, C_NT_GLOW + '0.55)');
+    g.addColorStop(0.5, C_NT_GLOW + '0.2)');
+    g.addColorStop(1, C_NT_GLOW + '0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r * 2.4, 0, Math.PI * 2);
+    ctx.fill();
+    // core
+    const cg = ctx.createRadialGradient(this.x - this.r * 0.3, this.y - this.r * 0.3, 0, this.x, this.y, this.r);
+    cg.addColorStop(0, 'rgba(255,255,255,0.95)');
+    cg.addColorStop(0.3, C_NT);
+    cg.addColorStop(1, '#be3879');
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+class Calcium {
+  constructor(x, y, region) {
+    this.x = x; this.y = y;
+    this.region = region; // 'outside' (cleft) or 'inside' (terminal)
+    this.vx = (Math.random() - 0.5) * 0.6;
+    this.vy = (Math.random() - 0.5) * 0.6;
+    this.r = 8;
+    this.state = 'free';
+    this.pathT = 0; this.pathSpeed = 0;
+    this.pathStart = null; this.pathEnd = null;
+    this.trail = [];
+  }
+  update(dt) {
+    this.trail.unshift({ x: this.x, y: this.y });
+    if (this.trail.length > 6) this.trail.pop();
+    if (this.state === 'transit') {
+      this.pathT += this.pathSpeed * dt;
+      if (this.pathT >= 1) {
+        this.pathT = 1;
+        this.x = this.pathEnd.x; this.y = this.pathEnd.y;
+        this.state = 'free';
+        this.region = 'inside';
+        this.vx = (Math.random() - 0.5) * 1.4;
+        this.vy = (Math.random() - 0.5) * 1.4;
+        return;
+      }
+      const t = this.pathT;
+      const ease = t * t * (3 - 2 * t);
+      this.x = lerp(this.pathStart.x, this.pathEnd.x, ease);
+      this.y = lerp(this.pathStart.y, this.pathEnd.y, ease);
+      return;
+    }
+    this.vx += (Math.random() - 0.5) * 0.2;
+    this.vy += (Math.random() - 0.5) * 0.2;
+    this.vx *= 0.94;
+    this.vy *= 0.94;
+    const sp = Math.hypot(this.vx, this.vy);
+    if (sp > 1.4) { this.vx = this.vx / sp * 1.4; this.vy = this.vy / sp * 1.4; }
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.region === 'outside') {
+      // confine to cleft
+      if (this.y < SYN_TOP + 18) { this.y = SYN_TOP + 18; this.vy = Math.abs(this.vy); }
+      if (this.y > SYN_BOT - 18) { this.y = SYN_BOT - 18; this.vy = -Math.abs(this.vy); }
+      const minX = preMembraneX(this.y) + this.r + 6;
+      const maxX = postMembraneX(this.y) - this.r - 6;
+      if (this.x < minX) { this.x = minX; this.vx = Math.abs(this.vx); }
+      if (this.x > maxX) { this.x = maxX; this.vx = -Math.abs(this.vx); }
+    } else {
+      // inside the terminal
+      if (this.y < SYN_TOP + 18) { this.y = SYN_TOP + 18; this.vy = Math.abs(this.vy); }
+      if (this.y > SYN_BOT - 18) { this.y = SYN_BOT - 18; this.vy = -Math.abs(this.vy); }
+      if (this.x < PRE_LEFT + this.r + 8) { this.x = PRE_LEFT + this.r + 8; this.vx = Math.abs(this.vx); }
+      const maxX = preMembraneX(this.y) - this.r - 4;
+      if (this.x > maxX) { this.x = maxX; this.vx = -Math.abs(this.vx); }
+    }
+  }
+  setTransit(end, speed) {
+    this.state = 'transit';
+    this.pathStart = { x: this.x, y: this.y };
+    this.pathEnd = end;
+    this.pathT = 0;
+    this.pathSpeed = speed;
+  }
+  draw(ctx) {
+    ctx.save();
+    for (let i = this.trail.length - 1; i > 0; i--) {
+      const p = this.trail[i];
+      const a = (1 - i / this.trail.length) * 0.18;
+      ctx.fillStyle = C_CA_GLOW + a + ')';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, this.r * 0.85, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r * 2.5);
+    g.addColorStop(0, C_CA_GLOW + '0.55)');
+    g.addColorStop(0.5, C_CA_GLOW + '0.2)');
+    g.addColorStop(1, C_CA_GLOW + '0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    const cg = ctx.createRadialGradient(this.x - this.r * 0.3, this.y - this.r * 0.3, 0, this.x, this.y, this.r);
+    cg.addColorStop(0, 'rgba(255,255,255,0.9)');
+    cg.addColorStop(0.3, C_CA);
+    cg.addColorStop(1, '#22a55a');
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.font = '700 9px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Ca²⁺', this.x, this.y + 0.5);
+    ctx.restore();
+  }
+}
+
+// Vesicle object
+class Vesicle {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.r = 18;
+    this.state = 'rest'; // rest, docking, fused
+    this.dockTarget = null; // {x,y}
+    this.dockT = 0; // 0..1 progress to dock
+    this.fuseT = 0; // 0..1 fade
+  }
+  update(dt) {
+    if (this.state === 'docking') {
+      this.dockT += dt / 800;
+      if (this.dockT >= 1) {
+        this.dockT = 1;
+        this.x = this.dockTarget.x;
+        this.y = this.dockTarget.y;
+        this.state = 'fused';
+      } else {
+        const t = this.dockT * this.dockT * (3 - 2 * this.dockT);
+        this.x = lerp(this.x0, this.dockTarget.x, t);
+        this.y = lerp(this.y0, this.dockTarget.y, t);
+      }
+    } else if (this.state === 'fused') {
+      this.fuseT += dt / 600;
+      if (this.fuseT > 1) this.fuseT = 1;
+    } else {
+      // gentle drift
+      this.x += (Math.random() - 0.5) * 0.3;
+      this.y += (Math.random() - 0.5) * 0.3;
+    }
+  }
+  startDock(target) {
+    this.state = 'docking';
+    this.dockT = 0;
+    this.x0 = this.x;
+    this.y0 = this.y;
+    this.dockTarget = target;
+  }
+  draw(ctx) {
+    if (this.state === 'fused' && this.fuseT >= 1) return;
+    const fade = this.state === 'fused' ? this.fuseT : 0;
+    drawVesicle(ctx, this.x, this.y, this.r, fade);
+  }
+}
+
+// =====================================================
+//  State
+// =====================================================
+let currentSceneIdx = 0;
+let animT = 0;
+let sceneFadeT = 0;
+let sceneLocal = {};
+
+function clearField() { sceneLocal = {}; }
+
+// =====================================================
+//  Anatomy label helper
+// =====================================================
+function drawLabel(ctx, text, lx, ly, tx, ty, color = '#ffd166') {
+  ctx.save();
+  ctx.font = '700 16px -apple-system, system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1.4;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(lx, ly);
+  ctx.lineTo(tx, ty);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(tx, ty, 4, 0, Math.PI * 2);
+  ctx.fill();
+  const m = ctx.measureText(text);
+  const padX = 10;
+  const bw = m.width + padX * 2;
+  const bh = 24;
+  ctx.fillStyle = 'rgba(16, 24, 48, 0.88)';
+  ctx.strokeStyle = `${color}99`;
+  ctx.lineWidth = 1;
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(lx - bw / 2, ly - bh / 2, bw, bh, 8); ctx.fill(); ctx.stroke(); }
+  else { ctx.fillRect(lx - bw / 2, ly - bh / 2, bw, bh); ctx.strokeRect(lx - bw / 2, ly - bh / 2, bw, bh); }
+  ctx.fillStyle = color;
+  ctx.fillText(text, lx, ly);
+  ctx.restore();
+}
+
+// =====================================================
+//  SCENE 1: The Neuron (identical to action-potential intro, but zoom box on terminals)
+// =====================================================
+const sceneNeuron = {
+  phase: 'Step 1: The Neuron',
+  phaseColor: '#ffb4a2',
+  notes: "Meet the neuron again. <strong>Dendrites</strong> receive signals, the <strong>cell body</strong> processes them, the <strong>axon</strong> sends the signal, and at the end are the <strong>terminals</strong>. Last time we zoomed in on the axon. <strong>This time we will zoom in at the very end</strong>, where one neuron talks to the next.",
+  notebook: "Sketch the neuron. <strong>Box the terminals at the end of the axon</strong>. That is where we are going next.",
+  setup() { clearField(); sceneLocal = { pulse: 0 }; },
+  update(dt) { sceneLocal.pulse += dt / 500; },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+    drawFullNeuron(ctx);
+    // zoom-in highlight on the TERMINAL area
+    const hx = W - 200, hy = MID;
+    const hp = 1 + Math.sin(sceneLocal.pulse) * 0.08;
+    ctx.save();
+    ctx.strokeStyle = `rgba(255, 209, 102, ${0.7 + Math.sin(sceneLocal.pulse) * 0.25})`;
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([8, 5]);
+    ctx.strokeRect(hx - 130 * hp, hy - 90 * hp, 260 * hp, 180 * hp);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffd166';
+    ctx.font = '700 17px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('we zoom in here →', hx, hy - 115);
+    ctx.restore();
+    // anatomy labels
+    ctx.save();
+    drawLabel(ctx, 'dendrites', 150, MID - 210, 200, MID - 110);
+    drawLabel(ctx, 'cell body (soma)', 340, MID + 170, 340, MID + 70);
+    drawLabel(ctx, 'axon', 740, MID - 70, 740, MID - 8);
+    drawLabel(ctx, 'axon terminals', W - 130, MID - 145, W - 200, MID - 60);
+    ctx.restore();
+  }
+};
+
+// =====================================================
+//  SCENE 2: Signal travels down the axon (lightning), stops at the terminal
+// =====================================================
+const sceneSignalTravels = {
+  phase: 'Step 2: The Signal Travels',
+  phaseColor: '#ffd166',
+  notes: "An <strong>action potential</strong> is born at the cell body and races down the <strong>axon</strong> like a bolt of electricity. It travels far. At the very end, it slams into the <strong>axon terminal</strong> and <strong>stops</strong>. Now what? It can't jump straight into the next neuron. Something else has to happen.",
+  notebook: "Watch the lightning travel. <strong>Mark in your notes:</strong> the action potential STARTS at the cell body, RUNS down the axon, and STOPS at the terminal.",
+  setup() {
+    clearField();
+    sceneLocal = {
+      pulse: 0,
+      // bolt starts at axon hillock, ends at terminal area
+      boltStart: { x: 435, y: MID },
+      boltEnd: { x: W - 260, y: MID },
+      progress: 0,
+      arrived: 0,
+      cycleT: 0,
+      sparkles: []
+    };
+  },
+  update(dt) {
+    sceneLocal.cycleT += dt;
+    const cycle = 2400; // ms full cycle
+    const phase = (sceneLocal.cycleT % cycle) / cycle;
+    if (phase < 0.7) {
+      sceneLocal.progress = phase / 0.7; // 0..1 traveling
+      sceneLocal.arrived = 0;
+    } else {
+      sceneLocal.progress = 1;
+      sceneLocal.arrived = (phase - 0.7) / 0.3;
+    }
+    // emit sparkles at the front
+    if (sceneLocal.progress < 1 && Math.random() < 0.5) {
+      const t = sceneLocal.progress;
+      const ax = lerp(sceneLocal.boltStart.x, sceneLocal.boltEnd.x, t);
+      const wave = Math.sin(t * Math.PI * 6) * 14;
+      sceneLocal.sparkles.push({
+        x: ax, y: MID + wave + (Math.random() - 0.5) * 8,
+        vx: (Math.random() - 0.5) * 1.0,
+        vy: (Math.random() - 0.5) * 1.0,
+        life: 1
+      });
+    }
+    sceneLocal.sparkles.forEach(s => {
+      s.x += s.vx; s.y += s.vy; s.life -= 0.04;
+    });
+    sceneLocal.sparkles = sceneLocal.sparkles.filter(s => s.life > 0);
+  },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+    drawFullNeuron(ctx);
+
+    const { boltStart, boltEnd, progress, arrived } = sceneLocal;
+
+    // draw the bolt as a jagged lightning path along the axon
+    ctx.save();
+    const segs = 22;
+    const reachedT = progress;
+    const points = [];
+    for (let i = 0; i <= segs; i++) {
+      const f = i / segs;
+      // axon path bezier: from boltStart to boltEnd via gentle wave (matches axon)
+      // approximate by linear + sine offset since axon is mostly horizontal
+      const x = lerp(boltStart.x, boltEnd.x, f);
+      const baseY = MID + Math.sin(f * Math.PI * 2.2) * 6;
+      const jag = (Math.random() - 0.5) * 14;
+      points.push({ x, y: baseY + jag * (f < reachedT ? 1 : 0) });
+    }
+    // glow underlay
+    ctx.strokeStyle = 'rgba(255, 209, 102, 0.5)';
+    ctx.lineWidth = 14;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let i = 0; i <= segs; i++) {
+      const f = i / segs;
+      if (f > reachedT) break;
+      const p = points[i];
+      if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    }
+    ctx.shadowBlur = 28;
+    ctx.shadowColor = 'rgba(255, 209, 102, 0.9)';
+    ctx.stroke();
+    // bright core
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (let i = 0; i <= segs; i++) {
+      const f = i / segs;
+      if (f > reachedT) break;
+      const p = points[i];
+      if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // sparkles
+    sceneLocal.sparkles.forEach(s => {
+      ctx.save();
+      ctx.globalAlpha = s.life * 0.8;
+      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 18);
+      g.addColorStop(0, 'rgba(255, 255, 220, 0.9)');
+      g.addColorStop(1, 'rgba(255, 209, 102, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(s.x, s.y, 18, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    });
+
+    // arrival burst at the terminal
+    if (arrived > 0) {
+      ctx.save();
+      const aOff = arrived;
+      const burstR = 80 + aOff * 80;
+      const g = ctx.createRadialGradient(boltEnd.x, boltEnd.y, 0, boltEnd.x, boltEnd.y, burstR);
+      g.addColorStop(0, `rgba(255, 209, 102, ${0.7 * (1 - aOff)})`);
+      g.addColorStop(1, 'rgba(255, 209, 102, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(boltEnd.x, boltEnd.y, burstR, 0, Math.PI * 2); ctx.fill();
+      // text label: "STOPS HERE"
+      if (arrived > 0.2) {
+        ctx.fillStyle = `rgba(255, 209, 102, ${arrived})`;
+        ctx.font = '700 18px -apple-system, system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('STOPS HERE', boltEnd.x, boltEnd.y - 130);
+      }
+      ctx.restore();
+    }
+
+    // zoom-in highlight on the synapse area (terminal)
+    sceneLocal.pulse = (sceneLocal.pulse || 0) + 0.05;
+    const hx = W - 200, hy = MID;
+    const hp = 1 + Math.sin(sceneLocal.pulse) * 0.08;
+    ctx.save();
+    ctx.strokeStyle = `rgba(255, 209, 102, ${0.55 + Math.sin(sceneLocal.pulse) * 0.2})`;
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([8, 5]);
+    ctx.strokeRect(hx - 140 * hp, hy - 95 * hp, 280 * hp, 190 * hp);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffd166';
+    ctx.font = '700 16px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('zoom in here →', hx, hy - 120);
+    ctx.restore();
+  }
+};
+
+// =====================================================
+//  SCENE 3: The Synapse (zoomed in)
+// =====================================================
+const sceneSynapseZoom = {
+  phase: 'Step 3: Inside the Synapse',
+  phaseColor: '#f472b6',
+  notes: "We are now <strong>zoomed in</strong> on the gap between two neurons. The <strong>presynaptic terminal</strong> on the left is the end of the first neuron's axon. The <strong>postsynaptic dendrite</strong> on the right belongs to the next neuron. The space between them is the <strong>synaptic cleft</strong>. Inside the terminal sit tiny bubbles called <strong>vesicles</strong>, packed full of <strong>neurotransmitters</strong>. On the other side, <strong>receptors</strong> wait.",
+  notebook: "Draw two cells with a gap between them. Label: <strong>presynaptic terminal</strong>, <strong>synaptic cleft</strong>, <strong>postsynaptic dendrite</strong>, <strong>vesicles</strong>, <strong>receptors</strong>.",
+  setup() {
+    clearField();
+    // create vesicles scattered inside the terminal
+    const ves = [];
+    const positions = [
+      { x: 220, y: 180 }, { x: 320, y: 140 }, { x: 420, y: 200 },
+      { x: 280, y: 280 }, { x: 380, y: 320 }, { x: 480, y: 260 },
+      { x: 220, y: 400 }, { x: 340, y: 440 }, { x: 460, y: 380 },
+      { x: 270, y: 510 }, { x: 390, y: 540 }, { x: 510, y: 470 },
+      { x: 600, y: 220 }, { x: 620, y: 380 }, { x: 580, y: 510 }
+    ];
+    positions.forEach(p => ves.push(new Vesicle(p.x, p.y)));
+    sceneLocal = { vesicles: ves, zoomT: 0, fadeIn: 0 };
+  },
+  update(dt) {
+    sceneLocal.zoomT = Math.min(1, sceneLocal.zoomT + dt / 700);
+    sceneLocal.fadeIn = sceneLocal.zoomT;
+    sceneLocal.vesicles.forEach(v => v.update(dt));
+  },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+
+    const z = sceneLocal.zoomT;
+    ctx.save();
+    ctx.globalAlpha = z;
+
+    drawPresynapticTerminal(ctx);
+    drawPostsynapticDendrite(ctx);
+
+    // cleft background — subtle blue wash
+    const cleftG = ctx.createLinearGradient(PRE_RIGHT, 0, POST_LEFT, 0);
+    cleftG.addColorStop(0, 'rgba(94, 234, 212, 0.04)');
+    cleftG.addColorStop(0.5, 'rgba(94, 234, 212, 0.08)');
+    cleftG.addColorStop(1, 'rgba(94, 234, 212, 0.04)');
+    ctx.fillStyle = cleftG;
+    ctx.fillRect(PRE_RIGHT - 4, SYN_TOP, POST_LEFT - PRE_RIGHT + 8, SYN_BOT - SYN_TOP);
+
+    // vesicles inside terminal
+    sceneLocal.vesicles.forEach(v => v.draw(ctx));
+
+    // receptors on postsynaptic membrane
+    [130, 220, 310, 400, 490, 570].forEach(y => drawReceptor(ctx, y, 0));
+
+    // calcium channels on presynaptic membrane (closed)
+    [150, 280, 410, 540].forEach(y => drawCalciumChannel(ctx, y, 0));
+
+    // labels
+    drawLabel(ctx, 'presynaptic terminal', 280, 60, 380, 110);
+    drawLabel(ctx, 'synaptic cleft', CLEFT_MID, 60, CLEFT_MID, 110, '#5eead4');
+    drawLabel(ctx, 'postsynaptic dendrite', 1280, 60, 1180, 110, '#b084ff');
+    drawLabel(ctx, 'vesicle', 200, 590, 320, 540, '#ffd166');
+    drawLabel(ctx, 'receptor', 1180, 595, 1010, 570, '#b084ff');
+    drawLabel(ctx, 'Ca²⁺ channel', 740, 600, 730, 555, C_CA);
+
+    ctx.restore();
+  }
+};
+
+// =====================================================
+//  SCENE 4: Calcium floods in
+// =====================================================
+const sceneCalcium = {
+  phase: 'Step 4: Calcium Triggers Everything',
+  phaseColor: '#4ade80',
+  notes: "The action potential opens <strong>voltage-gated Ca²⁺ channels</strong> on the presynaptic membrane. <strong>Calcium ions (Ca²⁺)</strong> flood IN from the cleft. <strong>This is the trigger.</strong> Without this calcium signal, vesicles never bud and no neurotransmitter is ever released. Calcium is the messenger that says <em>fire now</em>.",
+  notebook: "Draw the action potential arriving at the terminal. Show <strong>Ca²⁺ channels opening</strong> and Ca²⁺ rushing IN. Label: <strong>Ca²⁺ is the trigger</strong>.",
+  setup() {
+    clearField();
+    const ves = [];
+    const positions = [
+      { x: 220, y: 180 }, { x: 320, y: 140 }, { x: 420, y: 200 },
+      { x: 280, y: 280 }, { x: 380, y: 320 }, { x: 480, y: 260 },
+      { x: 220, y: 400 }, { x: 340, y: 440 }, { x: 460, y: 380 },
+      { x: 270, y: 510 }, { x: 390, y: 540 }, { x: 510, y: 470 },
+      { x: 600, y: 220 }, { x: 620, y: 380 }, { x: 580, y: 510 }
+    ];
+    positions.forEach(p => ves.push(new Vesicle(p.x, p.y)));
+    // calcium ions outside in cleft
+    const ca = [];
+    for (let i = 0; i < 14; i++) {
+      const cy = SYN_TOP + 30 + Math.random() * (SYN_BOT - SYN_TOP - 60);
+      const cx = PRE_RIGHT + 30 + Math.random() * (POST_LEFT - PRE_RIGHT - 60);
+      ca.push(new Calcium(cx, cy, 'outside'));
+    }
+    sceneLocal = {
+      vesicles: ves,
+      calciums: ca,
+      channels: [150, 280, 410, 540].map(y => ({ y, openness: 0, target: 0 })),
+      pulse: 0,
+      apArrived: 0
+    };
+  },
+  update(dt) {
+    sceneLocal.pulse += dt;
+    sceneLocal.apArrived = Math.min(1, sceneLocal.apArrived + dt / 600);
+    // open channels in waves
+    sceneLocal.channels.forEach((c, i) => {
+      if (sceneLocal.apArrived > 0.4 + i * 0.05) c.target = 1;
+      c.openness = lerp(c.openness, c.target, 0.08);
+    });
+    sceneLocal.calciums.forEach(c => {
+      // if a channel is open and calcium is near, transit through it
+      if (c.state === 'free' && c.region === 'outside') {
+        for (const ch of sceneLocal.channels) {
+          if (ch.openness > 0.6 && Math.abs(c.y - ch.y) < 60 && Math.abs(c.x - preMembraneX(ch.y)) < 80) {
+            c.setTransit({ x: preMembraneX(ch.y) - 60, y: ch.y + (Math.random() - 0.5) * 20 }, 1.5 / 1000, 'inside');
+            break;
+          }
+        }
+      }
+      c.update(dt);
+    });
+    sceneLocal.vesicles.forEach(v => v.update(dt));
+  },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+    drawPresynapticTerminal(ctx);
+    drawPostsynapticDendrite(ctx);
+
+    // arriving AP flash on the presynaptic membrane
+    const ap = Math.min(1, sceneLocal.apArrived);
+    if (ap > 0) {
+      ctx.save();
+      const flash = 0.4 + Math.sin(sceneLocal.pulse / 120) * 0.3 * (1 - ap);
+      ctx.fillStyle = `rgba(255, 209, 102, ${0.18 * flash + 0.06})`;
+      ctx.fillRect(PRE_LEFT + 200, SYN_TOP, PRE_RIGHT - PRE_LEFT - 200, SYN_BOT - SYN_TOP);
+      ctx.restore();
+    }
+
+    // vesicles still scattered
+    sceneLocal.vesicles.forEach(v => v.draw(ctx));
+
+    // channels (now opening)
+    sceneLocal.channels.forEach(c => drawCalciumChannel(ctx, c.y, c.openness));
+
+    // calcium ions
+    sceneLocal.calciums.forEach(c => c.draw(ctx));
+
+    // receptors (still empty)
+    [130, 220, 310, 400, 490, 570].forEach(y => drawReceptor(ctx, y, 0));
+
+    // big arrow + label "AP arrives"
+    ctx.save();
+    ctx.fillStyle = '#ffd166';
+    ctx.font = '700 18px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('action potential arrives →', 250, 50);
+    ctx.fillStyle = C_CA;
+    ctx.fillText('Ca²⁺ floods IN', preMembraneX(MID) - 80, 50);
+    ctx.restore();
+  }
+};
+
+// =====================================================
+//  SCENE 5: Vesicles dock and release
+// =====================================================
+const sceneRelease = {
+  phase: 'Step 5: Vesicles Release Neurotransmitters',
+  phaseColor: '#f472b6',
+  notes: "Calcium binds to the vesicles and tells them to <strong>move to the membrane and fuse with it</strong>. The vesicles open up and dump their <strong>neurotransmitters</strong> (pink) into the synaptic cleft. <strong>This is exocytosis.</strong> The vesicle becomes part of the membrane. The neurotransmitters are now free in the gap.",
+  notebook: "Draw vesicles fusing with the membrane. Show <strong>neurotransmitters released into the cleft</strong>. Use a different color for the NTs. Label: <strong>exocytosis</strong>.",
+  setup() {
+    clearField();
+    const ves = [];
+    const positions = [
+      { x: 220, y: 180, dockY: 150, willDock: false },
+      { x: 320, y: 140, dockY: 150, willDock: false },
+      { x: 420, y: 200, dockY: 150, willDock: true, delay: 0 },
+      { x: 280, y: 280, dockY: 280, willDock: true, delay: 200 },
+      { x: 380, y: 320, dockY: 280, willDock: false },
+      { x: 480, y: 260, dockY: 280, willDock: true, delay: 400 },
+      { x: 220, y: 400, dockY: 410, willDock: true, delay: 600 },
+      { x: 340, y: 440, dockY: 410, willDock: false },
+      { x: 460, y: 380, dockY: 410, willDock: true, delay: 800 },
+      { x: 270, y: 510, dockY: 540, willDock: true, delay: 1000 },
+      { x: 390, y: 540, dockY: 540, willDock: false },
+      { x: 510, y: 470, dockY: 540, willDock: true, delay: 1200 },
+      { x: 600, y: 220, dockY: 150, willDock: false },
+      { x: 620, y: 380, dockY: 410, willDock: false },
+      { x: 580, y: 510, dockY: 540, willDock: false }
+    ];
+    positions.forEach(p => {
+      const v = new Vesicle(p.x, p.y);
+      v.willDock = p.willDock;
+      v.dockY = p.dockY;
+      v.delay = p.delay || 0;
+      ves.push(v);
+    });
+    // calcium ions inside terminal (already entered)
+    const ca = [];
+    for (let i = 0; i < 12; i++) {
+      const cy = SYN_TOP + 30 + Math.random() * (SYN_BOT - SYN_TOP - 60);
+      const cx = PRE_LEFT + 80 + Math.random() * (PRE_RIGHT - PRE_LEFT - 200);
+      ca.push(new Calcium(cx, cy, 'inside'));
+    }
+    sceneLocal = {
+      vesicles: ves,
+      calciums: ca,
+      nts: [],
+      elapsed: 0,
+      releasedFromVes: new Set()
+    };
+  },
+  update(dt) {
+    sceneLocal.elapsed += dt;
+    sceneLocal.calciums.forEach(c => c.update(dt));
+    sceneLocal.vesicles.forEach((v, i) => {
+      if (v.willDock && v.state === 'rest' && sceneLocal.elapsed > v.delay + 200) {
+        v.startDock({ x: preMembraneX(v.dockY) - 12, y: v.dockY });
+      }
+      v.update(dt);
+      // when fused, release NTs into cleft (only once)
+      if (v.state === 'fused' && !sceneLocal.releasedFromVes.has(i)) {
+        sceneLocal.releasedFromVes.add(i);
+        for (let k = 0; k < 5; k++) {
+          const nt = new NT(v.x + 14, v.y + (Math.random() - 0.5) * 20);
+          nt.vx = 0.6 + Math.random() * 0.6;
+          nt.vy = (Math.random() - 0.5) * 1.0;
+          sceneLocal.nts.push(nt);
+        }
+      }
+    });
+    sceneLocal.nts.forEach(n => n.update(dt));
+  },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+    drawPresynapticTerminal(ctx);
+    drawPostsynapticDendrite(ctx);
+    sceneLocal.vesicles.forEach(v => v.draw(ctx));
+    sceneLocal.calciums.forEach(c => c.draw(ctx));
+    sceneLocal.nts.forEach(n => n.draw(ctx));
+    [150, 280, 410, 540].forEach(y => drawCalciumChannel(ctx, y, 1));
+    [130, 220, 310, 400, 490, 570].forEach(y => drawReceptor(ctx, y, 0));
+
+    // label
+    ctx.save();
+    ctx.fillStyle = C_NT;
+    ctx.font = '700 17px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('vesicles fuse → neurotransmitters released', 460, 50);
+    ctx.restore();
+  }
+};
+
+// =====================================================
+//  SCENE 6: NTs cross the cleft
+// =====================================================
+const sceneCross = {
+  phase: 'Step 6: Crossing the Cleft',
+  phaseColor: '#f472b6',
+  notes: "The neurotransmitters drift across the <strong>synaptic cleft</strong>. The cleft is small (about 20 nanometers) but it is still a real gap. The neurotransmitters move by <strong>diffusion</strong>: random motion that spreads them out until some bump into a receptor on the other side.",
+  notebook: "Draw arrows showing neurotransmitters drifting across the cleft. Label: <strong>diffusion</strong>.",
+  setup() {
+    clearField();
+    const nts = [];
+    // start NTs near presynaptic side, drifting toward post
+    for (let i = 0; i < 24; i++) {
+      const y = SYN_TOP + 40 + Math.random() * (SYN_BOT - SYN_TOP - 80);
+      const x = preMembraneX(y) + 20 + Math.random() * 80;
+      const n = new NT(x, y);
+      n.vx = 0.4 + Math.random() * 0.5;
+      n.vy = (Math.random() - 0.5) * 0.8;
+      nts.push(n);
+    }
+    sceneLocal = { nts, calciums: [], pulseT: 0 };
+    // some calcium for context
+    for (let i = 0; i < 6; i++) {
+      const cy = SYN_TOP + 30 + Math.random() * (SYN_BOT - SYN_TOP - 60);
+      const cx = PRE_LEFT + 100 + Math.random() * (PRE_RIGHT - PRE_LEFT - 220);
+      sceneLocal.calciums.push(new Calcium(cx, cy, 'inside'));
+    }
+  },
+  update(dt) {
+    sceneLocal.pulseT += dt;
+    sceneLocal.nts.forEach(n => n.update(dt));
+    sceneLocal.calciums.forEach(c => c.update(dt));
+  },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+    drawPresynapticTerminal(ctx);
+    drawPostsynapticDendrite(ctx);
+    sceneLocal.calciums.forEach(c => c.draw(ctx));
+    sceneLocal.nts.forEach(n => n.draw(ctx));
+    [150, 280, 410, 540].forEach(y => drawCalciumChannel(ctx, y, 0.8));
+    [130, 220, 310, 400, 490, 570].forEach(y => drawReceptor(ctx, y, 0));
+
+    // diffusion arrow
+    ctx.save();
+    ctx.strokeStyle = `rgba(244, 114, 182, ${0.5 + Math.sin(sceneLocal.pulseT / 300) * 0.3})`;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 7]);
+    for (let i = 0; i < 3; i++) {
+      const ay = 200 + i * 130;
+      ctx.beginPath();
+      ctx.moveTo(PRE_RIGHT + 30, ay);
+      ctx.lineTo(POST_LEFT - 40, ay);
+      ctx.stroke();
+      // arrowhead
+      ctx.fillStyle = `rgba(244, 114, 182, 0.7)`;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(POST_LEFT - 30, ay);
+      ctx.lineTo(POST_LEFT - 50, ay - 10);
+      ctx.lineTo(POST_LEFT - 50, ay + 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.setLineDash([10, 7]);
+    }
+    ctx.restore();
+    ctx.setLineDash([]);
+  }
+};
+
+// =====================================================
+//  SCENE 7: Binding to receptors
+// =====================================================
+const sceneBinding = {
+  phase: 'Step 7: Binding to Receptors',
+  phaseColor: '#b084ff',
+  notes: "Each neurotransmitter has a shape that fits a specific <strong>receptor</strong> like a key fits a lock. When an NT binds, the receptor changes shape and <strong>opens an ion channel</strong>. This lets <strong>Na⁺ flood IN</strong> on the postsynaptic side. The next neuron is now hearing the message.",
+  notebook: "Draw an NT clicking into a receptor. Show the receptor opening and <strong>Na⁺ rushing IN</strong>. Label: <strong>lock and key</strong>.",
+  setup() {
+    clearField();
+    const nts = [];
+    const receptorYs = [130, 220, 310, 400, 490, 570];
+    const receptors = receptorYs.map(y => ({ y, bound: 0, target: 0, slot: null }));
+    // create a bunch of NTs, some heading to receptors
+    for (let i = 0; i < 20; i++) {
+      const y = SYN_TOP + 40 + Math.random() * (SYN_BOT - SYN_TOP - 80);
+      const x = PRE_RIGHT + 40 + Math.random() * (POST_LEFT - PRE_RIGHT - 80);
+      nts.push(new NT(x, y));
+    }
+    sceneLocal = { nts, receptors, time: 0, naIons: [] };
+  },
+  update(dt) {
+    sceneLocal.time += dt;
+    // pick free NTs and assign them to unfilled receptors
+    sceneLocal.receptors.forEach((r, ri) => {
+      if (r.slot == null && r.target < 0.5) {
+        // find a free NT
+        const candidate = sceneLocal.nts.find(n => n.state === 'free');
+        if (candidate && Math.random() < 0.04) {
+          const dest = { x: postMembraneX(r.y) - 8, y: r.y };
+          candidate.setTransit(dest, 1.4 / 1000, 'receptor', r);
+          r.slot = candidate;
+          r.target = 1;
+        }
+      }
+      r.bound = lerp(r.bound, r.target, 0.05);
+      // emit Na+ into postsynaptic side once bound
+      if (r.bound > 0.6 && Math.random() < 0.06 * r.bound) {
+        sceneLocal.naIons.push({
+          x: postMembraneX(r.y) + 22,
+          y: r.y + (Math.random() - 0.5) * 30,
+          vx: 0.5 + Math.random() * 0.6,
+          vy: (Math.random() - 0.5) * 0.4,
+          life: 1
+        });
+      }
+    });
+    sceneLocal.nts.forEach(n => n.update(dt));
+    sceneLocal.naIons.forEach(n => {
+      n.x += n.vx; n.y += n.vy; n.life -= 0.005;
+    });
+    sceneLocal.naIons = sceneLocal.naIons.filter(n => n.life > 0 && n.x < W);
+  },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+    drawPresynapticTerminal(ctx);
+    drawPostsynapticDendrite(ctx);
+    sceneLocal.nts.forEach(n => n.draw(ctx));
+    sceneLocal.receptors.forEach(r => drawReceptor(ctx, r.y, r.bound));
+    [150, 280, 410, 540].forEach(y => drawCalciumChannel(ctx, y, 0.6));
+
+    // Na+ ions on postsynaptic side
+    sceneLocal.naIons.forEach(n => {
+      ctx.save();
+      ctx.globalAlpha = n.life;
+      const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 16);
+      g.addColorStop(0, 'rgba(255, 122, 107, 0.55)');
+      g.addColorStop(1, 'rgba(255, 122, 107, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(n.x, n.y, 16, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = C_NA;
+      ctx.beginPath(); ctx.arc(n.x, n.y, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.font = '700 9px -apple-system, system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Na⁺', n.x, n.y);
+      ctx.restore();
+    });
+
+    ctx.save();
+    ctx.fillStyle = C_PROT;
+    ctx.font = '700 17px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('NTs lock into receptors → Na⁺ flows IN', POST_LEFT + 200, 50);
+    ctx.restore();
+  }
+};
+
+// =====================================================
+//  SCENE 8: The next neuron fires
+// =====================================================
+const sceneNextFires = {
+  phase: 'Step 8: The Next Neuron Fires',
+  phaseColor: '#ff7a6b',
+  notes: "Enough Na⁺ rushes in to push the next neuron past <strong>threshold</strong>. The postsynaptic dendrite <strong>depolarizes</strong> and a brand new <strong>action potential</strong> takes off down ITS axon. The signal has been passed from one neuron to the next. <strong>That is how neurons talk.</strong>",
+  notebook: "Draw an action potential traveling away from the synapse, down the next neuron's axon. Label: <strong>signal passed</strong>.",
+  setup() {
+    clearField();
+    const nts = [];
+    const receptorYs = [130, 220, 310, 400, 490, 570];
+    const receptors = receptorYs.map(y => ({ y, bound: 1 }));
+    for (let i = 0; i < 14; i++) {
+      const y = SYN_TOP + 40 + Math.random() * (SYN_BOT - SYN_TOP - 80);
+      const x = PRE_RIGHT + 40 + Math.random() * (POST_LEFT - PRE_RIGHT - 80);
+      nts.push(new NT(x, y));
+    }
+    sceneLocal = { nts, receptors, naIons: [], boltT: 0, cycleT: 0, sparkles: [] };
+  },
+  update(dt) {
+    sceneLocal.cycleT += dt;
+    const cycle = 2400;
+    const phase = (sceneLocal.cycleT % cycle) / cycle;
+    sceneLocal.boltT = clamp(phase / 0.85, 0, 1);
+    sceneLocal.nts.forEach(n => n.update(dt));
+    // generate Na+ ions throughout
+    if (Math.random() < 0.4) {
+      const ry = sceneLocal.receptors[Math.floor(Math.random() * 6)].y;
+      sceneLocal.naIons.push({
+        x: postMembraneX(ry) + 22,
+        y: ry + (Math.random() - 0.5) * 30,
+        vx: 0.6 + Math.random() * 0.8,
+        vy: (Math.random() - 0.5) * 0.4,
+        life: 1
+      });
+    }
+    sceneLocal.naIons.forEach(n => {
+      n.x += n.vx; n.y += n.vy; n.life -= 0.006;
+    });
+    sceneLocal.naIons = sceneLocal.naIons.filter(n => n.life > 0 && n.x < W);
+
+    // sparkles for the bolt
+    if (sceneLocal.boltT < 1 && Math.random() < 0.5) {
+      const t = sceneLocal.boltT;
+      const x = lerp(POST_LEFT + 40, W - 60, t);
+      sceneLocal.sparkles.push({
+        x, y: MID + (Math.random() - 0.5) * 14,
+        vx: (Math.random() - 0.5) * 1, vy: (Math.random() - 0.5) * 1,
+        life: 1
+      });
+    }
+    sceneLocal.sparkles.forEach(s => { s.x += s.vx; s.y += s.vy; s.life -= 0.04; });
+    sceneLocal.sparkles = sceneLocal.sparkles.filter(s => s.life > 0);
+  },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+    drawPresynapticTerminal(ctx);
+    drawPostsynapticDendrite(ctx);
+
+    sceneLocal.nts.forEach(n => n.draw(ctx));
+    sceneLocal.receptors.forEach(r => drawReceptor(ctx, r.y, r.bound));
+    [150, 280, 410, 540].forEach(y => drawCalciumChannel(ctx, y, 0.4));
+
+    // Na ions
+    sceneLocal.naIons.forEach(n => {
+      ctx.save();
+      ctx.globalAlpha = n.life;
+      const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 18);
+      g.addColorStop(0, 'rgba(255, 122, 107, 0.55)');
+      g.addColorStop(1, 'rgba(255, 122, 107, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(n.x, n.y, 18, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = C_NA;
+      ctx.beginPath(); ctx.arc(n.x, n.y, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.font = '700 9px -apple-system, system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Na⁺', n.x, n.y);
+      ctx.restore();
+    });
+
+    // NEW action potential traveling away on the postsynaptic side
+    const reachedT = sceneLocal.boltT;
+    if (reachedT > 0) {
+      ctx.save();
+      const segs = 18;
+      const startX = POST_LEFT + 50, endX = W - 30;
+      const points = [];
+      for (let i = 0; i <= segs; i++) {
+        const f = i / segs;
+        const x = lerp(startX, endX, f);
+        const baseY = MID + Math.sin(f * Math.PI * 2) * 8;
+        const jag = (Math.random() - 0.5) * 12;
+        points.push({ x, y: baseY + jag * (f < reachedT ? 1 : 0) });
+      }
+      ctx.strokeStyle = 'rgba(255, 209, 102, 0.55)';
+      ctx.lineWidth = 14;
+      ctx.lineCap = 'round';
+      ctx.shadowBlur = 28;
+      ctx.shadowColor = 'rgba(255, 209, 102, 0.9)';
+      ctx.beginPath();
+      for (let i = 0; i <= segs; i++) {
+        const f = i / segs;
+        if (f > reachedT) break;
+        const p = points[i];
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 14;
+      ctx.shadowColor = 'rgba(255,255,255,0.9)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      for (let i = 0; i <= segs; i++) {
+        const f = i / segs;
+        if (f > reachedT) break;
+        const p = points[i];
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    sceneLocal.sparkles.forEach(s => {
+      ctx.save();
+      ctx.globalAlpha = s.life * 0.8;
+      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 18);
+      g.addColorStop(0, 'rgba(255,255,220,0.9)');
+      g.addColorStop(1, 'rgba(255,209,102,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(s.x, s.y, 18, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    });
+
+    ctx.save();
+    ctx.fillStyle = '#ffd166';
+    ctx.font = '700 18px -apple-system, system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('new action potential travels →', POST_LEFT + 30, 50);
+    ctx.restore();
+  }
+};
+
+// =====================================================
+//  SCENE 9: Reuptake
+// =====================================================
+const sceneReuptake = {
+  phase: 'Step 9: Reuptake',
+  phaseColor: '#5eead4',
+  notes: "The signal has fired. Now the synapse needs to <strong>reset</strong> or it will keep firing forever. <strong>Reuptake transporters</strong> on the presynaptic membrane grab leftover neurotransmitters out of the cleft and pull them <strong>back into the terminal</strong>. The NTs get repackaged into new vesicles and the synapse is ready to fire again.",
+  notebook: "Draw transporters on the presynaptic side <strong>vacuuming NTs back IN</strong>. Label: <strong>reuptake</strong>. <em>Why does this matter?</em> Note that drugs like SSRIs block reuptake to keep more NTs in the cleft.",
+  setup() {
+    clearField();
+    const nts = [];
+    for (let i = 0; i < 18; i++) {
+      const y = SYN_TOP + 40 + Math.random() * (SYN_BOT - SYN_TOP - 80);
+      const x = PRE_RIGHT + 40 + Math.random() * (POST_LEFT - PRE_RIGHT - 80);
+      nts.push(new NT(x, y));
+    }
+    const transporterYs = [215, 345, 475];
+    const transporters = transporterYs.map(y => ({ y, active: 0, target: 0, busy: false, busyT: 0 }));
+    sceneLocal = { nts, transporters, time: 0 };
+  },
+  update(dt) {
+    sceneLocal.time += dt;
+    sceneLocal.transporters.forEach(tr => {
+      tr.target = 1;
+      tr.active = lerp(tr.active, tr.target, 0.04);
+      // grab a free NT close to it
+      if (!tr.busy && tr.active > 0.5) {
+        const candidate = sceneLocal.nts.find(n => n.state === 'free' && Math.abs(n.y - tr.y) < 80 && n.x < preMembraneX(tr.y) + 60);
+        if (candidate) {
+          const dest = { x: preMembraneX(tr.y) - 30, y: tr.y };
+          candidate.setTransit(dest, 1.6 / 1000, 'reuptake');
+          tr.busy = true;
+          tr.busyT = 0;
+        }
+      }
+      if (tr.busy) {
+        tr.busyT += dt;
+        if (tr.busyT > 800) tr.busy = false;
+      }
+    });
+    sceneLocal.nts.forEach(n => n.update(dt));
+  },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+    drawPresynapticTerminal(ctx);
+    drawPostsynapticDendrite(ctx);
+    sceneLocal.nts.forEach(n => n.draw(ctx));
+    [130, 220, 310, 400, 490, 570].forEach(y => drawReceptor(ctx, y, 0.3));
+    [150, 280, 410, 540].forEach(y => drawCalciumChannel(ctx, y, 0));
+    sceneLocal.transporters.forEach(tr => drawTransporter(ctx, tr.y, tr.active));
+
+    // arrows showing direction (back into terminal)
+    ctx.save();
+    sceneLocal.transporters.forEach(tr => {
+      ctx.strokeStyle = `rgba(94, 234, 212, ${0.4 + Math.sin(sceneLocal.time / 200 + tr.y) * 0.3})`;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(preMembraneX(tr.y) + 80, tr.y);
+      ctx.lineTo(preMembraneX(tr.y) - 30, tr.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // arrowhead
+      ctx.fillStyle = `rgba(94, 234, 212, 0.7)`;
+      ctx.beginPath();
+      ctx.moveTo(preMembraneX(tr.y) - 20, tr.y);
+      ctx.lineTo(preMembraneX(tr.y), tr.y - 8);
+      ctx.lineTo(preMembraneX(tr.y), tr.y + 8);
+      ctx.closePath();
+      ctx.fill();
+    });
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = C_TRANS;
+    ctx.font = '700 17px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('reuptake transporters pull NTs back IN', 460, 50);
+    ctx.restore();
+  }
+};
+
+// =====================================================
+//  SCENE 10: Interactive — add/remove NTs
+// =====================================================
+const sceneInteractive = {
+  phase: 'Step 10: Try It · More or Fewer NTs?',
+  phaseColor: '#f472b6',
+  isInteractive: true,
+  notes: "Your turn. Click <strong>+ Add NTs</strong> to put more neurotransmitters in the cleft. Watch how fast the postsynaptic neuron fires. Then click <strong>− Remove NTs</strong> and watch it slow down. <strong>More NTs = more receptors bound = quicker firing.</strong> This is why NT levels matter so much for how your brain feels and acts.",
+  notebook: "Try both buttons. In your notes write: <strong>more NTs → faster firing. Fewer NTs → slower firing.</strong> Why might a brain want to control how many NTs are out there?",
+  setup() {
+    clearField();
+    const nts = [];
+    // start with a baseline number
+    for (let i = 0; i < 20; i++) {
+      const y = SYN_TOP + 40 + Math.random() * (SYN_BOT - SYN_TOP - 80);
+      const x = PRE_RIGHT + 40 + Math.random() * (POST_LEFT - PRE_RIGHT - 80);
+      nts.push(new NT(x, y));
+    }
+    const receptorYs = [130, 220, 310, 400, 490, 570];
+    const receptors = receptorYs.map(y => ({ y, bound: 0, target: 0, slot: null, lastFire: 0 }));
+    sceneLocal = {
+      nts,
+      receptors,
+      time: 0,
+      naIons: [],
+      apTrains: [], // each train is a {progress, sparkles}
+      apTimer: 0,
+      lastBoundCount: 0,
+      sparkles: []
+    };
+  },
+  update(dt) {
+    sceneLocal.time += dt;
+
+    // assign NTs to free receptors
+    sceneLocal.receptors.forEach((r) => {
+      if (r.slot == null && r.target < 0.5) {
+        const candidate = sceneLocal.nts.find(n => n.state === 'free');
+        if (candidate && Math.random() < 0.04) {
+          const dest = { x: postMembraneX(r.y) - 8, y: r.y };
+          candidate.setTransit(dest, 1.4 / 1000, 'receptor', r);
+          r.slot = candidate;
+          r.target = 1;
+        }
+      }
+      r.bound = lerp(r.bound, r.target, 0.05);
+      // unbind after a short while so the simulation keeps cycling
+      if (r.slot && r.slot.state === 'bound') {
+        if (r.slot.bondT > 1500) {
+          // release: NT goes back to free
+          r.slot.state = 'free';
+          r.slot.vx = (Math.random() - 0.5) * 0.8;
+          r.slot.vy = (Math.random() - 0.5) * 0.8;
+          // nudge it off the receptor face
+          r.slot.x = postMembraneX(r.y) - 25;
+          r.slot.y = r.y + (Math.random() - 0.5) * 14;
+          r.slot = null;
+          r.target = 0;
+          r.bound = 0;
+        }
+      }
+      if (r.bound > 0.6 && Math.random() < 0.06 * r.bound) {
+        sceneLocal.naIons.push({
+          x: postMembraneX(r.y) + 22,
+          y: r.y + (Math.random() - 0.5) * 30,
+          vx: 0.5 + Math.random() * 0.6,
+          vy: (Math.random() - 0.5) * 0.4,
+          life: 1
+        });
+      }
+    });
+
+    // bound count drives firing rate
+    const boundCount = sceneLocal.receptors.filter(r => r.bound > 0.5).length;
+    sceneLocal.lastBoundCount = boundCount;
+
+    // firing rate scales with bound count + NT density
+    const ntCount = sceneLocal.nts.length;
+    const ntFactor = clamp(ntCount / 30, 0, 1.6);
+    const interval = 2200 - ntFactor * 1700; // ms between APs (more NTs → smaller interval)
+    sceneLocal.apTimer += dt;
+    if (boundCount >= 2 && sceneLocal.apTimer > interval) {
+      sceneLocal.apTimer = 0;
+      sceneLocal.apTrains.push({ progress: 0 });
+    }
+
+    // advance AP trains
+    const apSpeed = 0.0008 + ntFactor * 0.0006;
+    sceneLocal.apTrains.forEach(ap => { ap.progress += apSpeed * dt; });
+    sceneLocal.apTrains = sceneLocal.apTrains.filter(ap => ap.progress < 1.05);
+
+    // ions
+    sceneLocal.naIons.forEach(n => { n.x += n.vx; n.y += n.vy; n.life -= 0.005; });
+    sceneLocal.naIons = sceneLocal.naIons.filter(n => n.life > 0 && n.x < W);
+
+    sceneLocal.nts.forEach(n => n.update(dt));
+
+    // sparkles for AP trains
+    sceneLocal.apTrains.forEach(ap => {
+      if (ap.progress < 1 && Math.random() < 0.4) {
+        const x = lerp(POST_LEFT + 40, W - 30, ap.progress);
+        sceneLocal.sparkles.push({
+          x, y: MID + (Math.random() - 0.5) * 12,
+          vx: (Math.random() - 0.5) * 1, vy: (Math.random() - 0.5) * 1,
+          life: 1
+        });
+      }
+    });
+    sceneLocal.sparkles.forEach(s => { s.x += s.vx; s.y += s.vy; s.life -= 0.04; });
+    sceneLocal.sparkles = sceneLocal.sparkles.filter(s => s.life > 0);
+  },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+    drawPresynapticTerminal(ctx);
+    drawPostsynapticDendrite(ctx);
+    sceneLocal.nts.forEach(n => n.draw(ctx));
+    sceneLocal.receptors.forEach(r => drawReceptor(ctx, r.y, r.bound));
+    [150, 280, 410, 540].forEach(y => drawCalciumChannel(ctx, y, 0.5));
+
+    // Na+ ions
+    sceneLocal.naIons.forEach(n => {
+      ctx.save();
+      ctx.globalAlpha = n.life;
+      const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 16);
+      g.addColorStop(0, 'rgba(255, 122, 107, 0.5)');
+      g.addColorStop(1, 'rgba(255, 122, 107, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(n.x, n.y, 16, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = C_NA;
+      ctx.beginPath(); ctx.arc(n.x, n.y, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.font = '700 9px -apple-system, system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Na⁺', n.x, n.y);
+      ctx.restore();
+    });
+
+    // AP trains traveling on the postsynaptic side
+    sceneLocal.apTrains.forEach(ap => {
+      const reachedT = ap.progress;
+      ctx.save();
+      const segs = 18;
+      const startX = POST_LEFT + 50, endX = W - 30;
+      const points = [];
+      for (let i = 0; i <= segs; i++) {
+        const f = i / segs;
+        const x = lerp(startX, endX, f);
+        const baseY = MID + Math.sin(f * Math.PI * 2) * 8;
+        const jag = (Math.random() - 0.5) * 10;
+        points.push({ x, y: baseY + jag * (f < reachedT ? 1 : 0) });
+      }
+      ctx.strokeStyle = 'rgba(255, 209, 102, 0.55)';
+      ctx.lineWidth = 12;
+      ctx.lineCap = 'round';
+      ctx.shadowBlur = 22;
+      ctx.shadowColor = 'rgba(255, 209, 102, 0.9)';
+      ctx.beginPath();
+      for (let i = 0; i <= segs; i++) {
+        const f = i / segs;
+        if (f > reachedT) break;
+        const p = points[i];
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+      ctx.shadowBlur = 12;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      for (let i = 0; i <= segs; i++) {
+        const f = i / segs;
+        if (f > reachedT) break;
+        const p = points[i];
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    sceneLocal.sparkles.forEach(s => {
+      ctx.save();
+      ctx.globalAlpha = s.life * 0.7;
+      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 16);
+      g.addColorStop(0, 'rgba(255,255,220,0.9)');
+      g.addColorStop(1, 'rgba(255,209,102,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(s.x, s.y, 16, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    });
+
+    // header text — show NT count at top
+    const ntCount = sceneLocal.nts.length;
+    let label = 'normal range';
+    let color = '#f472b6';
+    if (ntCount > 35) { label = 'flooded · fast firing'; color = '#ff7a6b'; }
+    else if (ntCount < 8) { label = 'depleted · slow firing'; color = '#5eead4'; }
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.font = '700 18px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(label.toUpperCase(), CLEFT_MID, 50);
+    ctx.restore();
+  },
+  addNTs(count = 6) {
+    for (let i = 0; i < count; i++) {
+      const y = SYN_TOP + 40 + Math.random() * (SYN_BOT - SYN_TOP - 80);
+      const x = PRE_RIGHT + 30 + Math.random() * (POST_LEFT - PRE_RIGHT - 60);
+      const n = new NT(x, y);
+      n.vx = (Math.random() - 0.5) * 0.8;
+      n.vy = (Math.random() - 0.5) * 0.8;
+      sceneLocal.nts.push(n);
+    }
+  },
+  removeNTs(count = 6) {
+    // remove free NTs first
+    let removed = 0;
+    for (let i = sceneLocal.nts.length - 1; i >= 0 && removed < count; i--) {
+      if (sceneLocal.nts[i].state === 'free') {
+        sceneLocal.nts.splice(i, 1);
+        removed++;
+      }
+    }
+  }
+};
+
+// =====================================================
+//  SCENE 11: Different NTs, Different Pathways (interactive cards)
+// =====================================================
+const scenePathways = {
+  phase: 'Step 11: Different Messages, Different Brains',
+  phaseColor: '#b084ff',
+  notes: "Same machinery, completely different effects. The neurotransmitter and the pathway it travels in determines what the signal <em>does</em>. <strong>Click each card below</strong> to see what each chemical messenger controls.",
+  notebook: "List all six neurotransmitters with what they do. Circle one you want to remember.",
+  isPathways: true,
+  setup() {
+    clearField();
+    sceneLocal = { particles: [], time: 0, glow: 0 };
+    // background floating NTs of different colors
+    const colors = ['#f472b6', '#5eead4', '#ffd166', '#ff7a6b', '#5cc9ff', '#b084ff'];
+    for (let i = 0; i < 60; i++) {
+      sceneLocal.particles.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.6,
+        vy: (Math.random() - 0.5) * 0.6,
+        r: 5 + Math.random() * 4,
+        c: colors[i % colors.length]
+      });
+    }
+  },
+  update(dt) {
+    sceneLocal.time += dt;
+    sceneLocal.glow = (Math.sin(sceneLocal.time / 600) + 1) * 0.5;
+    sceneLocal.particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > W) p.vx *= -1;
+      if (p.y < 0 || p.y > H) p.vy *= -1;
+    });
+  },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+
+    // dim brain glow background
+    const cx = W / 2, cy = H / 2;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 700);
+    g.addColorStop(0, `rgba(176, 132, 255, ${0.18 + sceneLocal.glow * 0.06})`);
+    g.addColorStop(0.5, 'rgba(99, 102, 241, 0.06)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // floating colored particles
+    sceneLocal.particles.forEach(p => {
+      ctx.save();
+      const gr = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 3);
+      gr.addColorStop(0, `${p.c}90`);
+      gr.addColorStop(1, `${p.c}00`);
+      ctx.fillStyle = gr;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = p.c;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    });
+
+    // big text in the middle
+    ctx.save();
+    ctx.fillStyle = 'rgba(245, 245, 245, 0.92)';
+    ctx.font = '900 56px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('every feeling, every move,', W / 2, H / 2 - 50);
+    ctx.fillStyle = 'rgba(244, 114, 182, 0.9)';
+    ctx.fillText('one synapse at a time', W / 2, H / 2 + 30);
+    ctx.font = '500 22px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(160, 160, 160, 0.85)';
+    ctx.fillText('click the cards below to see what each neurotransmitter does ↓', W / 2, H / 2 + 100);
+    ctx.restore();
+  }
+};
+
+// =====================================================
+//  Scene list
+// =====================================================
+const scenes = [
+  sceneNeuron,
+  sceneSignalTravels,
+  sceneSynapseZoom,
+  sceneCalcium,
+  sceneRelease,
+  sceneCross,
+  sceneBinding,
+  sceneNextFires,
+  sceneReuptake,
+  sceneInteractive,
+  scenePathways
+];
+
+// =====================================================
+//  UI
+// =====================================================
+const phaseNameEl = document.getElementById("phaseName");
+const notesEl = document.getElementById("notes");
+const stepHeadingEl = document.getElementById("stepHeading");
+const notebookTextEl = document.getElementById("notebookText");
+const stepIndicator = document.getElementById("stepIndicator");
+const prevBtn = document.getElementById("prevBtn");
+const nextBtn = document.getElementById("nextBtn");
+const resetBtn = document.getElementById("resetBtn");
+const simControlsEl = document.getElementById("simControls");
+const ntPlusBtn = document.getElementById("ntPlusBtn");
+const ntMinusBtn = document.getElementById("ntMinusBtn");
+const simReadout = document.getElementById("simReadout");
+const notesCard = document.querySelector('.notes-card');
+const contentEl = document.querySelector('.content');
+
+function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+// scratch container for the pathway cards
+let pathwayContainer = null;
+
+const NT_PATHWAYS = [
+  { name: 'DOPAMINE', tag: 'reward', color: '#f472b6',
+    body: '<strong>Motivation, reward, focus.</strong> Released in pathways tied to wanting and going after things. Drugs of abuse hijack this system. Low dopamine → trouble starting. Too much → addiction-like loops.' },
+  { name: 'SEROTONIN', tag: 'mood', color: '#5cc9ff',
+    body: '<strong>Mood, calm, sleep.</strong> Stabilizes how you feel day to day. SSRIs (Prozac, Zoloft) block serotonin reuptake to keep more of it in the cleft. Low serotonin is linked to depression and anxiety.' },
+  { name: 'ENDORPHINS', tag: 'pain relief', color: '#ffd166',
+    body: '<strong>Pain blockers, natural high.</strong> Released after exercise, laughter, injury. Bind to opioid receptors to dull pain and create a calm, pleasant feeling. Morphine and heroin mimic them.' },
+  { name: 'GLUTAMATE', tag: 'excite', color: '#ff7a6b',
+    body: '<strong>The brain\'s "go" signal.</strong> Most common excitatory NT. Drives information processing, learning, and memory. Too much glutamate is toxic: it can over-excite neurons until they die.' },
+  { name: 'GABA', tag: 'calm', color: '#5eead4',
+    body: '<strong>The brain\'s "stop" signal.</strong> Inhibitory NT. Keeps neurons from firing too much. Alcohol and benzodiazepines (Xanax) boost GABA, so they slow you down and feel calming.' },
+  { name: 'ACETYLCHOLINE', tag: 'move + remember', color: '#b084ff',
+    body: '<strong>Muscles, touch, attention, memory.</strong> Every time you move, ACh fires at the muscle. In the brain it sharpens attention and helps form memories. Alzheimer\'s is partly an ACh problem.' }
+];
+
+function renderPathwayCards() {
+  // remove if it already exists
+  if (pathwayContainer) { pathwayContainer.remove(); pathwayContainer = null; }
+  pathwayContainer = document.createElement('div');
+  pathwayContainer.className = 'pathway-breakdown';
+  let html = '<div class="pb-head">Click each chemical messenger</div>';
+  html += '<div class="pb-bar"><div class="pb-fill" id="pbFill"></div></div>';
+  html += '<div class="pb-text" id="pbText">0 of ' + NT_PATHWAYS.length + ' revealed</div>';
+  NT_PATHWAYS.forEach((nt, i) => {
+    html += `
+      <button class="nt-card" data-idx="${i}" style="--pc-color:${nt.color}">
+        <span class="pc-num">${nt.tag}</span>
+        <div class="pc-body">
+          <div class="pc-title">${nt.name}</div>
+          <div class="pc-reveal">click to reveal what it does →</div>
+          <div class="pc-content">${nt.body}</div>
+        </div>
+      </button>
+    `;
+  });
+  pathwayContainer.innerHTML = html;
+  notesCard.appendChild(pathwayContainer);
+  let revealed = 0;
+  pathwayContainer.querySelectorAll('.nt-card').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('revealed')) return;
+      btn.classList.add('revealed');
+      revealed++;
+      pathwayContainer.querySelector('#pbFill').style.width = (revealed / NT_PATHWAYS.length * 100) + '%';
+      const txt = pathwayContainer.querySelector('#pbText');
+      txt.textContent = revealed + ' of ' + NT_PATHWAYS.length + ' revealed';
+      if (revealed === NT_PATHWAYS.length) txt.classList.add('complete');
+    });
+  });
+}
+
+function clearPathwayCards() {
+  if (pathwayContainer) { pathwayContainer.remove(); pathwayContainer = null; }
+}
+
+function setScene(i) {
+  currentSceneIdx = i;
+  animT = 0;
+  sceneFadeT = 0;
+  const s = scenes[i];
+  if (s.setup) s.setup();
+  phaseNameEl.textContent = s.phase;
+  phaseNameEl.style.color = s.phaseColor;
+  notesEl.innerHTML = s.notes;
+  stepHeadingEl.textContent = s.phase;
+  notebookTextEl.innerHTML = s.notebook;
+  stepIndicator.textContent = `${pad2(i + 1)} / ${pad2(scenes.length)}`;
+  prevBtn.disabled = i === 0;
+  nextBtn.disabled = i === scenes.length - 1;
+  nextBtn.textContent = i === scenes.length - 1 ? 'Done' : 'Next →';
+
+  // sim controls only on scene 10
+  if (s.isInteractive) {
+    simControlsEl.classList.add('visible');
+  } else {
+    simControlsEl.classList.remove('visible');
+  }
+
+  // pathway cards only on scene 11
+  if (s.isPathways) {
+    renderPathwayCards();
+  } else {
+    clearPathwayCards();
+  }
+}
+
+prevBtn.addEventListener("click", () => { if (currentSceneIdx > 0) setScene(currentSceneIdx - 1); });
+nextBtn.addEventListener("click", () => { if (currentSceneIdx < scenes.length - 1) setScene(currentSceneIdx + 1); });
+resetBtn.addEventListener("click", () => setScene(0));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowRight" && currentSceneIdx < scenes.length - 1) setScene(currentSceneIdx + 1);
+  if (e.key === "ArrowLeft" && currentSceneIdx > 0) setScene(currentSceneIdx - 1);
+});
+
+// interactive sim handlers
+ntPlusBtn.addEventListener("click", () => {
+  const s = scenes[currentSceneIdx];
+  if (s.isInteractive && s.addNTs) {
+    s.addNTs(8);
+    updateSimReadout();
+  }
+});
+ntMinusBtn.addEventListener("click", () => {
+  const s = scenes[currentSceneIdx];
+  if (s.isInteractive && s.removeNTs) {
+    s.removeNTs(8);
+    updateSimReadout();
+  }
+});
+
+function updateSimReadout() {
+  if (sceneLocal && sceneLocal.nts) {
+    simReadout.innerHTML = `NTs in cleft: <strong>${sceneLocal.nts.length}</strong>`;
+  }
+}
+
+// =====================================================
+//  Main loop
+// =====================================================
+let lastTs = null;
+function tick(ts) {
+  if (lastTs == null) lastTs = ts;
+  const dt = Math.min(50, ts - lastTs);
+  lastTs = ts;
+  animT += dt;
+  sceneFadeT = Math.min(1, sceneFadeT + dt / 600);
+  const s = scenes[currentSceneIdx];
+  if (s.update) s.update(dt);
+  ctx.save();
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = sceneFadeT;
+  s.draw(ctx, animT);
+  ctx.restore();
+  // live readout for sim
+  if (s.isInteractive) updateSimReadout();
+  requestAnimationFrame(tick);
+}
+
+setScene(0);
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
