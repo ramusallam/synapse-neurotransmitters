@@ -1999,6 +1999,26 @@ const sceneReleaseBindFire = {
     if (phase >= 0.62 && sceneLocal.lastPhase < 0.62) {
       sceneLocal.ignition = 1;
     }
+
+    // RELEASE PHASE — NTs fall off the receptors and drift back into the cleft,
+    // setting up reuptake in the next step
+    if (phase >= 0.82 && sceneLocal.lastPhase < 0.82) {
+      sceneLocal.receptors.forEach(r => {
+        if (r.slot && r.slot.state === 'bound') {
+          const nt = r.slot;
+          nt.state = 'free';
+          nt.x = POST_MEM_X - 22;
+          nt.y = r.y + (Math.random() - 0.5) * 10;
+          nt.vx = -0.5 - Math.random() * 0.25;  // strong leftward push off the receptor
+          nt.vy = (Math.random() - 0.5) * 0.25;
+          nt.driftX = -0.012;                    // sustained leftward drift
+          nt.jitter = 0.04;
+          r.slot = null;
+          r.target = 0;
+          r.bound = 0;
+        }
+      });
+    }
     sceneLocal.lastPhase = phase;
 
     // bolt sparkles
