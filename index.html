@@ -885,6 +885,7 @@ class NT {
     this.pathStart = null; this.pathEnd = null;
     this.boundReceptor = null;
     this.trail = [];
+    this.jitter = 0.18;  // brownian jitter strength; lower = smoother drift
   }
   update(dt) {
     this.trail.unshift({ x: this.x, y: this.y });
@@ -914,10 +915,10 @@ class NT {
     if (this.state === 'bound') { this.bondT += dt; return; }
     if (this.state === 'recycled') return;
     // free drift
-    this.vx += (Math.random() - 0.5) * 0.18;
-    this.vy += (Math.random() - 0.5) * 0.18;
-    this.vx *= 0.95;
-    this.vy *= 0.95;
+    this.vx += (Math.random() - 0.5) * this.jitter;
+    this.vy += (Math.random() - 0.5) * this.jitter;
+    this.vx *= 0.97;
+    this.vy *= 0.97;
     const sp = Math.hypot(this.vx, this.vy);
     if (sp > 1.0) { this.vx = this.vx / sp * 1.0; this.vy = this.vy / sp * 1.0; }
     this.x += this.vx; this.y += this.vy;
@@ -1879,9 +1880,10 @@ const sceneReleaseBindFire = {
         sceneLocal.released.add(i);
         for (let k = 0; k < 5; k++) {
           const nt = new NT(v.x + 14, v.y + (Math.random() - 0.5) * 16);
-          // slow, gentle rightward drift so the group floats across visibly
-          nt.vx = 0.25 + Math.random() * 0.18;
-          nt.vy = (Math.random() - 0.5) * 0.5;
+          // smooth, gentle rightward glide so the group floats across visibly
+          nt.vx = 0.32 + Math.random() * 0.12;
+          nt.vy = (Math.random() - 0.5) * 0.18;
+          nt.jitter = 0.03;  // very smooth — minimal random walk
           sceneLocal.nts.push(nt);
         }
       }
