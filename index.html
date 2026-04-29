@@ -2304,82 +2304,409 @@ function drawMiniSynapse(ctx, ox, oy, scale, opts) {
   ctx.restore();
 }
 
+// Helper: tiny stylized neuron icon (cell body + dendrites + axon stub)
+function drawTinyNeuron(ctx, cx, cy, color, axonDir = 1) {
+  ctx.save();
+  // dendrites (3 short branches on the side opposite axon)
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  const dDir = -axonDir;
+  for (const [a, len] of [[-0.6, 26], [0, 30], [0.6, 26]]) {
+    ctx.beginPath();
+    ctx.moveTo(cx + 12 * dDir, cy + Math.sin(a) * 6);
+    ctx.lineTo(cx + (12 + len) * dDir, cy + Math.sin(a) * 24);
+    ctx.stroke();
+  }
+  // cell body
+  const sg = ctx.createRadialGradient(cx - 4, cy - 4, 0, cx, cy, 14);
+  sg.addColorStop(0, '#ffffff44');
+  sg.addColorStop(0.4, color);
+  sg.addColorStop(1, color);
+  ctx.fillStyle = sg;
+  ctx.beginPath(); ctx.arc(cx, cy, 13, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // small specular
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.beginPath(); ctx.arc(cx - 4, cy - 4, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+// Helper: panel frame with title + description
+function drawPlasticityPanel(ctx, x, y, w, h, accent, num, title, desc, drawAnim) {
+  ctx.save();
+  // card body
+  const bg = ctx.createLinearGradient(0, y, 0, y + h);
+  bg.addColorStop(0, 'rgba(22, 22, 28, 0.85)');
+  bg.addColorStop(1, 'rgba(14, 14, 20, 0.85)');
+  ctx.fillStyle = bg;
+  ctx.shadowBlur = 14;
+  ctx.shadowColor = `${accent}33`;
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, 14); ctx.fill(); }
+  ctx.shadowBlur = 0;
+  // accent border
+  ctx.strokeStyle = `${accent}66`;
+  ctx.lineWidth = 1.5;
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, 14); ctx.stroke(); }
+  // accent left bar
+  ctx.fillStyle = accent;
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, 4, h, 2); ctx.fill(); }
+
+  // header row: number + title
+  ctx.font = '900 13px -apple-system, system-ui';
+  ctx.fillStyle = `${accent}aa`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(num, x + 22, y + 26);
+  ctx.font = '900 22px -apple-system, system-ui';
+  ctx.fillStyle = accent;
+  ctx.fillText(title, x + 50, y + 26);
+
+  // description
+  ctx.font = '500 13px -apple-system, system-ui';
+  ctx.fillStyle = 'rgba(220, 220, 230, 0.85)';
+  ctx.fillText(desc, x + 22, y + 50);
+
+  // animation area
+  drawAnim();
+  ctx.restore();
+}
+
 const sceneNeuroplasticity = {
-  phase: 'Step 9: Neuroplasticity · Use it, Strengthen it',
+  phase: 'Step 9: Neuroplasticity · The Brain Rewires Itself',
   phaseColor: '#a855f7',
-  notes: "Synapses are not fixed. <strong>The more you use a synapse, the stronger it gets.</strong> The bouton grows bigger. More vesicles. More receptors. The next signal fires faster and easier. <strong>This is neuroplasticity.</strong> Every time you study, practice, repeat a skill, or replay a thought, you are physically strengthening the synapses in that pathway. Learning literally rewires your brain.",
-  notebook: "Compare the two synapses above. Which one is the <strong>practiced</strong> one? Write: <strong>neurons that fire together, wire together</strong>. List one habit or skill you have built up over time and circle it.",
+  notes: "<strong>Neuroplasticity</strong> is the brain's ability to change by <strong>building, strengthening, weakening, or speeding up</strong> connections between neurons. None of this would be possible without synapses connecting many neurons together. <strong>This is the ultimate hope message.</strong> You can learn. You can change your thinking. You can grow. People recover from addiction. People rebuild after injury. Your reality is not fixed because your brain is not fixed.",
+  notebook: "Copy all four kinds of neuroplasticity into your notes. Then write: <strong>my brain can change.</strong> Pick one habit, skill, or thought pattern you want to grow, and circle it as your neuroplasticity goal.",
   setup() {
     clearField();
-    sceneLocal = { fireT: 0, weakFire: false, strongFire: false, time: 0 };
+    sceneLocal = { time: 0 };
   },
   update(dt) {
     sceneLocal.time += dt;
-    sceneLocal.fireT += dt;
-    // weak fires every 1800ms, strong every 700ms
-    sceneLocal.weakFire = (sceneLocal.fireT % 1800) < 250;
-    sceneLocal.strongFire = (sceneLocal.fireT % 700) < 200;
   },
   draw(ctx, t) {
     ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, W, H);
 
-    // left: weak synapse (small)
-    drawMiniSynapse(ctx, W / 4, H / 2 + 30, 0.42, {
-      vesicles: 3, receptors: 2, fired: sceneLocal.weakFire
-    });
-    // right: strong synapse (big)
-    drawMiniSynapse(ctx, W * 3 / 4, H / 2 + 30, 0.55, {
-      vesicles: 12, receptors: 6, fired: sceneLocal.strongFire
-    });
-
-    // labels
+    // Header
     ctx.save();
-    ctx.fillStyle = '#a0a0a0';
-    ctx.font = '700 24px -apple-system, system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText('weak synapse', W / 4, 50);
-    ctx.font = '500 13px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(160, 160, 160, 0.85)';
-    ctx.fillText('rarely used → small, slow', W / 4, 72);
-
-    ctx.fillStyle = '#a855f7';
+    ctx.fillStyle = 'rgba(245, 245, 245, 0.95)';
     ctx.font = '900 28px -apple-system, system-ui';
-    ctx.fillText('STRONG synapse', W * 3 / 4, 50);
-    ctx.font = '500 13px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(168, 85, 247, 0.85)';
-    ctx.fillText('practiced → bigger, faster, more reliable', W * 3 / 4, 72);
-
-    // arrow + caption between them
-    ctx.strokeStyle = 'rgba(168, 85, 247, 0.6)';
-    ctx.lineWidth = 3;
-    ctx.setLineDash([10, 6]);
-    ctx.beginPath();
-    ctx.moveTo(W / 4 + 240, 100);
-    ctx.lineTo(W * 3 / 4 - 280, 100);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#a855f7';
-    ctx.beginPath();
-    ctx.moveTo(W * 3 / 4 - 270, 100);
-    ctx.lineTo(W * 3 / 4 - 290, 92);
-    ctx.lineTo(W * 3 / 4 - 290, 108);
-    ctx.closePath(); ctx.fill();
-    ctx.font = '600 14px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(168, 85, 247, 0.85)';
     ctx.textAlign = 'center';
-    ctx.fillText('practice it', W / 2, 95);
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('NEUROPLASTICITY', W / 2, 38);
+    ctx.font = '500 13px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(168, 85, 247, 0.9)';
+    ctx.fillText("the brain's 4 moves for changing itself", W / 2, 60);
+    ctx.font = '400 12px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(160, 160, 160, 0.75)';
+    ctx.fillText("none of this works without synapses connecting many neurons together", W / 2, 80);
     ctx.restore();
 
-    // bottom caption
+    // 2×2 grid of panels
+    const pw = 750, ph = 222, gap = 22;
+    const sx = (W - pw * 2 - gap) / 2;
+    const sy = 100;
+
+    // Panel 1 — BUILD
+    drawPlasticityPanel(ctx, sx, sy, pw, ph, '#22c55e', '01', 'BUILD',
+      'new synapses form between neurons',
+      () => panelBuild(ctx, sx, sy, pw, ph, sceneLocal.time));
+
+    // Panel 2 — STRENGTHEN
+    drawPlasticityPanel(ctx, sx + pw + gap, sy, pw, ph, '#a855f7', '02', 'STRENGTHEN',
+      'practiced synapses grow bigger and fire faster',
+      () => panelStrengthen(ctx, sx + pw + gap, sy, pw, ph, sceneLocal.time));
+
+    // Panel 3 — WEAKEN
+    drawPlasticityPanel(ctx, sx, sy + ph + gap, pw, ph, '#f59e0b', '03', 'WEAKEN',
+      'unused synapses shrink and prune away',
+      () => panelWeaken(ctx, sx, sy + ph + gap, pw, ph, sceneLocal.time));
+
+    // Panel 4 — MYELINATE
+    drawPlasticityPanel(ctx, sx + pw + gap, sy + ph + gap, pw, ph, '#5cc9ff', '04', 'SPEED UP',
+      'more myelin around used pathways → faster signals (myelin unit)',
+      () => panelMyelinate(ctx, sx + pw + gap, sy + ph + gap, pw, ph, sceneLocal.time));
+
+    // Hope footer — the bigger message
     ctx.save();
-    ctx.fillStyle = 'rgba(245, 245, 245, 0.88)';
-    ctx.font = '700 18px -apple-system, system-ui';
+    const fy = H - 36;
+    const fpulse = (Math.sin(sceneLocal.time / 800) + 1) * 0.5;
+    // soft glow behind the text
+    const fg = ctx.createRadialGradient(W / 2, fy + 4, 0, W / 2, fy + 4, 380);
+    fg.addColorStop(0, `rgba(168, 85, 247, ${0.12 + fpulse * 0.06})`);
+    fg.addColorStop(1, 'rgba(168, 85, 247, 0)');
+    ctx.fillStyle = fg;
+    ctx.fillRect(0, fy - 30, W, 60);
+    ctx.fillStyle = 'rgba(245, 245, 245, 0.95)';
+    ctx.font = '900 18px -apple-system, system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('every time you practice, study, or repeat, your synapses physically grow stronger', W / 2, H - 30);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('your brain can change.', W / 2 - 220, fy);
+    ctx.fillStyle = '#a855f7';
+    ctx.fillText('growth · healing · recovery · hope', W / 2 + 140, fy);
     ctx.restore();
   }
 };
+
+// ── Panel 1: BUILD — bouton grows out and connects to next neuron ──
+function panelBuild(ctx, px, py, pw, ph, time) {
+  const cy = py + ph / 2 + 18;
+  const ax = px + 130;
+  const bx = px + pw - 130;
+  const t = (time % 4500) / 4500;
+
+  drawTinyNeuron(ctx, ax, cy, '#d49a8d', 1);   // left, axon points right
+  drawTinyNeuron(ctx, bx, cy, '#9a7fc0', -1);  // right, dendrites point left
+
+  // growing axon from left toward right
+  const startX = ax + 13;
+  const dendriteTipX = bx - 12;
+  const grow = clamp(t / 0.7, 0, 1);
+  const tipX = lerp(startX, dendriteTipX, grow);
+
+  ctx.save();
+  ctx.strokeStyle = '#d49a8d';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(startX, cy);
+  ctx.lineTo(tipX, cy);
+  ctx.stroke();
+  // small bouton at tip
+  if (grow > 0.05) {
+    const br = 3 + grow * 6;
+    const fg = ctx.createRadialGradient(tipX, cy, 0, tipX, cy, br);
+    fg.addColorStop(0, '#fae2d4');
+    fg.addColorStop(1, '#c78373');
+    ctx.fillStyle = fg;
+    ctx.beginPath(); ctx.arc(tipX, cy, br, 0, Math.PI * 2); ctx.fill();
+  }
+  // when connected (t > 0.7), pink NT pulses
+  if (t > 0.7) {
+    const f = (t - 0.7) / 0.3;
+    for (let i = 0; i < 4; i++) {
+      const phase = (time / 80 + i * 0.7) % 1;
+      const sx = lerp(tipX + 6, dendriteTipX, phase);
+      ctx.fillStyle = `rgba(244, 114, 182, ${(1 - phase) * 0.85 * f})`;
+      ctx.beginPath(); ctx.arc(sx, cy, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    // success ring
+    if (f > 0.5) {
+      ctx.strokeStyle = `rgba(34, 197, 94, ${(1 - f) * 0.5})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(tipX, cy, 14 + f * 18, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  // labels
+  ctx.fillStyle = 'rgba(220, 220, 230, 0.55)';
+  ctx.font = '500 11px -apple-system, system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('neuron A', ax, cy + 56);
+  ctx.fillText('neuron B', bx, cy + 56);
+  ctx.font = '600 12px -apple-system, system-ui';
+  ctx.fillStyle = `rgba(34, 197, 94, ${0.6 + Math.sin(time / 400) * 0.25})`;
+  ctx.fillText('a brand new synapse forms', (ax + bx) / 2, cy - 30);
+  ctx.restore();
+}
+
+// ── Panel 2: STRENGTHEN — synapse grows bigger and fires faster ──
+function panelStrengthen(ctx, px, py, pw, ph, time) {
+  const cy = py + ph / 2 + 18;
+  const ax = px + 130;
+  const bx = px + pw - 130;
+  // growth cycles 0..1 then resets
+  const cycle = (time % 6000) / 6000;
+  const growth = cycle; // 0 = thin, 1 = thick
+
+  drawTinyNeuron(ctx, ax, cy, '#d49a8d', 1);
+  drawTinyNeuron(ctx, bx, cy, '#9a7fc0', -1);
+
+  ctx.save();
+  // axon thickness scales with growth
+  const lineW = lerp(3, 9, growth);
+  ctx.strokeStyle = '#d49a8d';
+  ctx.lineWidth = lineW;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(ax + 13, cy);
+  ctx.lineTo(bx - 12, cy);
+  ctx.stroke();
+
+  // bouton at end grows
+  const br = lerp(5, 16, growth);
+  const fg = ctx.createRadialGradient(bx - 18, cy, 0, bx - 18, cy, br);
+  fg.addColorStop(0, '#fae2d4');
+  fg.addColorStop(1, '#c78373');
+  ctx.fillStyle = fg;
+  ctx.beginPath(); ctx.arc(bx - 18, cy, br, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#a86456';
+  ctx.lineWidth = 1.5; ctx.stroke();
+
+  // vesicle dots inside the bouton — count grows with strength
+  const ves = Math.round(lerp(1, 7, growth));
+  ctx.fillStyle = C_NT;
+  for (let i = 0; i < ves; i++) {
+    const a = i * 0.95;
+    const r = br * 0.45;
+    ctx.beginPath();
+    ctx.arc(bx - 18 + Math.cos(a) * r, cy + Math.sin(a) * r, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // firing pulses — frequency scales with growth
+  const pulseRate = lerp(900, 280, growth);
+  for (let i = 0; i < 4; i++) {
+    const phase = ((time + i * pulseRate / 2) % pulseRate) / pulseRate;
+    const x = lerp(ax + 14, bx - 24, phase);
+    const a = (1 - phase) * 0.85;
+    ctx.fillStyle = `rgba(255, 209, 102, ${a})`;
+    ctx.beginPath(); ctx.arc(x, cy, 2.5 + growth * 1.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // caption
+  ctx.fillStyle = 'rgba(220, 220, 230, 0.55)';
+  ctx.font = '500 11px -apple-system, system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('practiced often', ax + (bx - ax) / 2, cy + 56);
+  ctx.font = '600 12px -apple-system, system-ui';
+  ctx.fillStyle = `rgba(168, 85, 247, ${0.6 + growth * 0.3})`;
+  ctx.fillText('bouton grows · more vesicles · faster firing', (ax + bx) / 2, cy - 30);
+  ctx.restore();
+}
+
+// ── Panel 3: WEAKEN — synapse shrinks and prunes ──
+function panelWeaken(ctx, px, py, pw, ph, time) {
+  const cy = py + ph / 2 + 18;
+  const ax = px + 130;
+  const bx = px + pw - 130;
+  // decay 1..0 then resets
+  const cycle = (time % 5500) / 5500;
+  let decay = 1 - cycle;
+  if (decay < 0) decay = 0;
+
+  drawTinyNeuron(ctx, ax, cy, '#d49a8d', 1);
+  drawTinyNeuron(ctx, bx, cy, '#9a7fc0', -1);
+
+  ctx.save();
+  const lineW = lerp(2, 7, decay);
+  ctx.strokeStyle = `rgba(212, 154, 141, ${0.3 + decay * 0.7})`;
+  ctx.lineWidth = lineW;
+  ctx.lineCap = 'round';
+  // line breaks near the end
+  const breakStart = decay < 0.4 ? lerp(ax + 13, bx - 24, 0.5) : bx - 24;
+  ctx.beginPath();
+  ctx.moveTo(ax + 13, cy);
+  ctx.lineTo(breakStart, cy);
+  ctx.stroke();
+
+  // bouton shrinks then disappears
+  if (decay > 0.15) {
+    const br = lerp(3, 14, decay);
+    const fg = ctx.createRadialGradient(bx - 18, cy, 0, bx - 18, cy, br);
+    fg.addColorStop(0, `rgba(250, 226, 212, ${decay})`);
+    fg.addColorStop(1, `rgba(199, 131, 115, ${decay})`);
+    ctx.fillStyle = fg;
+    ctx.beginPath(); ctx.arc(bx - 18, cy, br, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // dust particles drifting away when pruning
+  if (decay < 0.5) {
+    const fade = 1 - decay * 2;
+    for (let i = 0; i < 5; i++) {
+      const phase = (time / 60 + i * 0.7) % 1;
+      const px2 = lerp(bx - 18, bx - 18 - 40, phase);
+      const py2 = cy + (Math.random() - 0.5) * 2 + Math.sin(phase * Math.PI * 2 + i) * 8;
+      ctx.fillStyle = `rgba(245, 158, 11, ${(1 - phase) * fade * 0.6})`;
+      ctx.beginPath(); ctx.arc(px2, py2, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // labels
+  ctx.fillStyle = 'rgba(220, 220, 230, 0.55)';
+  ctx.font = '500 11px -apple-system, system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('rarely used', ax + (bx - ax) / 2, cy + 56);
+  ctx.font = '600 12px -apple-system, system-ui';
+  ctx.fillStyle = `rgba(245, 158, 11, 0.85)`;
+  ctx.fillText('the synapse shrinks · the connection prunes', (ax + bx) / 2, cy - 30);
+  ctx.restore();
+}
+
+// ── Panel 4: MYELINATE — axon gains myelin, signal speeds up ──
+function panelMyelinate(ctx, px, py, pw, ph, time) {
+  const cy = py + ph / 2 + 18;
+  const ax = px + 100;
+  const bx = px + pw - 100;
+  // gradually add myelin segments over the cycle
+  const cycle = (time % 6000) / 6000;
+  const myelinFraction = clamp(cycle * 1.4, 0, 1);
+
+  drawTinyNeuron(ctx, ax, cy, '#d49a8d', 1);
+  drawTinyNeuron(ctx, bx, cy, '#9a7fc0', -1);
+
+  ctx.save();
+  // bare axon
+  ctx.strokeStyle = '#d49a8d';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(ax + 13, cy);
+  ctx.lineTo(bx - 12, cy);
+  ctx.stroke();
+
+  // myelin segments — capsules along the axon
+  const segs = 6;
+  const segGap = 8;
+  const totalLen = (bx - 12) - (ax + 20);
+  const segLen = (totalLen - segGap * (segs - 1)) / segs;
+  const startX = ax + 20;
+  const visibleSegs = Math.floor(myelinFraction * segs);
+  for (let i = 0; i < visibleSegs; i++) {
+    const sx = startX + i * (segLen + segGap);
+    const fadeIn = clamp((myelinFraction * segs - i), 0, 1);
+    // myelin sheath capsule
+    const mg = ctx.createLinearGradient(0, cy - 9, 0, cy + 9);
+    mg.addColorStop(0, `rgba(245, 245, 250, ${fadeIn * 0.95})`);
+    mg.addColorStop(0.5, `rgba(220, 220, 235, ${fadeIn * 0.9})`);
+    mg.addColorStop(1, `rgba(180, 185, 210, ${fadeIn * 0.85})`);
+    ctx.fillStyle = mg;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(sx, cy - 9, segLen, 18, 9); ctx.fill(); }
+    ctx.strokeStyle = `rgba(150, 160, 200, ${fadeIn * 0.7})`;
+    ctx.lineWidth = 1;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(sx, cy - 9, segLen, 18, 9); ctx.stroke(); }
+  }
+
+  // signal pulse — speed scales with myelin coverage
+  const pulseSpeed = lerp(1.0, 3.5, myelinFraction);
+  const pulseProg = ((time / 1400) * pulseSpeed) % 1;
+  const pulseX = lerp(ax + 14, bx - 14, pulseProg);
+  // glow
+  const pg = ctx.createRadialGradient(pulseX, cy, 0, pulseX, cy, 22);
+  pg.addColorStop(0, 'rgba(255, 240, 180, 0.95)');
+  pg.addColorStop(0.4, 'rgba(255, 209, 102, 0.55)');
+  pg.addColorStop(1, 'rgba(255, 209, 102, 0)');
+  ctx.fillStyle = pg;
+  ctx.beginPath(); ctx.arc(pulseX, cy, 22, 0, Math.PI * 2); ctx.fill();
+  // bright core
+  ctx.fillStyle = 'rgba(255, 255, 240, 0.95)';
+  ctx.beginPath(); ctx.arc(pulseX, cy, 4, 0, Math.PI * 2); ctx.fill();
+
+  // labels
+  ctx.fillStyle = 'rgba(220, 220, 230, 0.55)';
+  ctx.font = '500 11px -apple-system, system-ui';
+  ctx.textAlign = 'center';
+  const speedLabel = myelinFraction < 0.3 ? 'no myelin · slow' :
+                     myelinFraction < 0.7 ? 'adding myelin · faster' :
+                     'fully myelinated · fastest';
+  ctx.fillText(speedLabel, (ax + bx) / 2, cy + 56);
+  ctx.font = '600 12px -apple-system, system-ui';
+  ctx.fillStyle = `rgba(92, 201, 255, 0.85)`;
+  ctx.fillText('myelin sheaths grow on used pathways', (ax + bx) / 2, cy - 30);
+  ctx.restore();
+}
 
 // =====================================================
 //  SCENE 10: Common Neurotransmitters
@@ -2509,10 +2836,10 @@ const sceneCommonNTs = {
 //  SCENE 11: SSRIs / Zoloft
 // =====================================================
 const sceneSSRI = {
-  phase: 'Step 11: How Zoloft Works (SSRIs)',
+  phase: 'Step 11: Case Study · Medicine',
   phaseColor: '#7dd3fc',
-  notes: "<strong>Zoloft is an SSRI: Selective Serotonin Reuptake Inhibitor.</strong> It targets the <strong>serotonin transporters</strong> on the presynaptic membrane and <strong>blocks them</strong>. Important: <strong>it does NOT make MORE serotonin.</strong> It just stops the reuptake. The serotonin you already release stays in the synapse <strong>longer</strong>, so it binds receptors longer, so the mood-lifting signal lasts longer. That is how SSRIs help with depression.",
-  notebook: "Draw transporters with SSRI molecules <strong>blocking</strong> them. Write: <strong>SSRI = Selective Serotonin Reuptake Inhibitor.</strong> SSRIs don't make more serotonin. They keep what you already have around longer.",
+  notes: "<strong>Case study time.</strong> Now that you understand the synapse, let's look at one whole class of medicine: <strong>SSRIs · Selective Serotonin Reuptake Inhibitors</strong>. Common ones include <strong>Zoloft, Prozac, Paxil, Lexapro, and Celexa</strong>. They all do the same thing: target the <strong>serotonin transporters</strong> on the presynaptic membrane and <strong>block them</strong>. Important: <strong>they do NOT make MORE serotonin.</strong> They just stop the reuptake, so the serotonin you already release stays in the synapse <strong>longer</strong> and binds receptors longer. That is how SSRIs help with depression and anxiety.",
+  notebook: "Write: <strong>SSRI = Selective Serotonin Reuptake Inhibitor.</strong> List at least three SSRI brand names from the screen. Then explain in one sentence: SSRIs do NOT make more serotonin — they just keep what you already have around longer.",
   setup() {
     clearField();
     const nts = [];
@@ -2672,15 +2999,24 @@ const sceneSSRI = {
       ctx.restore();
     });
 
-    // Header
+    // Case Study header
     ctx.save();
+    // small "case study" tag
+    ctx.font = '700 11px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(125, 211, 252, 0.7)';
+    ctx.textAlign = 'center';
+    ctx.fillText('CASE STUDY · MEDICINE', CLEFT_MID, 28);
+    // main title
     ctx.fillStyle = C_SSRI;
     ctx.font = '900 26px -apple-system, system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText('ZOLOFT (SSRI)', CLEFT_MID, 50);
-    ctx.font = '500 13px -apple-system, system-ui';
+    ctx.fillText('SSRI', CLEFT_MID, 56);
+    ctx.font = '500 12px -apple-system, system-ui';
     ctx.fillStyle = 'rgba(125, 211, 252, 0.85)';
-    ctx.fillText('Selective Serotonin Reuptake Inhibitor', CLEFT_MID, 72);
+    ctx.fillText('Selective Serotonin Reuptake Inhibitor', CLEFT_MID, 76);
+    // brand names row
+    ctx.font = '600 13px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(245, 245, 245, 0.85)';
+    ctx.fillText('Zoloft  ·  Prozac  ·  Paxil  ·  Lexapro  ·  Celexa', CLEFT_MID, 100);
     ctx.restore();
 
     // Footer note
