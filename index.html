@@ -3377,22 +3377,12 @@ const sceneSSRI = {
     drawCaseSide(ctx, sceneLocal.maoi, t, true);
     ctx.restore();
 
-    // Footer takeaway lines
+    // single takeaway line — bigger, cleaner
     ctx.save();
-    ctx.font = '700 13px -apple-system, system-ui';
+    ctx.font = '700 19px -apple-system, system-ui';
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(125, 211, 252, 0.95)';
-    ctx.fillText('reuptake blocked → serotonin stays OUTSIDE in the synapse longer', W / 4, H - 60);
-    ctx.fillStyle = 'rgba(251, 146, 60, 0.95)';
-    ctx.fillText('enzyme blocked → serotonin not destroyed → more available', W * 3 / 4, H - 60);
-    // MAOI caveat
-    ctx.font = '500 11px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(255, 80, 80, 0.85)';
-    ctx.fillText('MAO Inhibitors are rarely first-line: dangerous interactions with aged cheese, wine, & many drugs', W * 3 / 4, H - 38);
-    // Bottom unifying line
-    ctx.font = '700 14px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(245, 245, 245, 0.85)';
-    ctx.fillText('both → more serotonin signaling → relief from depression & anxiety', W / 2, H - 14);
+    ctx.fillStyle = 'rgba(245, 245, 245, 0.95)';
+    ctx.fillText('both → more serotonin signaling → relief from depression & anxiety', W / 2, H - 28);
     ctx.restore();
   }
 };
