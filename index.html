@@ -664,13 +664,22 @@ function drawCalciumChannel(ctx, y, openness) {
 function drawReceptor(ctx, y, boundFraction) {
   const x = POST_MEM_X;
   ctx.save();
-  // trunk embedded in dendrite (right of membrane)
-  ctx.fillStyle = 'rgba(70, 50, 110, 0.95)';
+
+  // trunk embedded in dendrite — gradient depth
+  const trunkGrad = ctx.createLinearGradient(x, 0, x + 22, 0);
+  trunkGrad.addColorStop(0, 'rgba(90, 65, 140, 0.98)');
+  trunkGrad.addColorStop(1, 'rgba(50, 35, 90, 0.98)');
+  ctx.fillStyle = trunkGrad;
   roundRect(ctx, x, y - 18, 22, 36, 6);
   ctx.fill();
-  // cup arms extending into cleft (left of membrane)
-  const cupColor = boundFraction > 0.5 ? '#c4a3ff' : '#9a7fc0';
-  ctx.fillStyle = cupColor;
+
+  // cup arms with gradient and binding-aware color
+  const armBase = boundFraction > 0.5 ? '#c4a3ff' : '#9a7fc0';
+  const armDark = boundFraction > 0.5 ? '#8a64d8' : '#604584';
+  const armGrad = ctx.createLinearGradient(x - 22, 0, x + 2, 0);
+  armGrad.addColorStop(0, armBase);
+  armGrad.addColorStop(1, armDark);
+  ctx.fillStyle = armGrad;
   // top arm
   ctx.beginPath();
   ctx.moveTo(x + 2, y - 22);
@@ -687,43 +696,95 @@ function drawReceptor(ctx, y, boundFraction) {
   ctx.lineTo(x + 2, y + 4);
   ctx.closePath();
   ctx.fill();
-  // socket
+  // arm highlight
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x - 22, y - 16); ctx.lineTo(x + 2, y - 22);
+  ctx.moveTo(x - 22, y + 16); ctx.lineTo(x + 2, y + 22);
+  ctx.stroke();
+
   if (boundFraction < 0.5) {
-    // empty
-    ctx.fillStyle = 'rgba(40, 25, 70, 0.95)';
+    // EMPTY — dark socket with subtle inner shadow
+    const sg = ctx.createRadialGradient(x - 12, y - 2, 0, x - 10, y, 10);
+    sg.addColorStop(0, 'rgba(60, 40, 90, 0.98)');
+    sg.addColorStop(1, 'rgba(20, 12, 40, 0.98)');
+    ctx.fillStyle = sg;
     ctx.beginPath(); ctx.arc(x - 10, y, 9, 0, Math.PI * 2); ctx.fill();
+    // rim
     ctx.strokeStyle = 'rgba(176, 132, 255, 0.65)';
     ctx.lineWidth = 1.5; ctx.stroke();
+    // subtle idle pulse ring
+    const idle = (Math.sin((animT || 0) / 700 + y * 0.03) + 1) * 0.5;
+    ctx.strokeStyle = `rgba(176, 132, 255, ${0.15 + idle * 0.15})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(x - 10, y, 11 + idle * 2, 0, Math.PI * 2); ctx.stroke();
   } else {
-    // bound — NT ball sits in socket
+    // BOUND — NT ball sits in socket
     const f = boundFraction;
-    const gg = ctx.createRadialGradient(x - 10, y, 0, x - 10, y, 26);
-    gg.addColorStop(0, `rgba(244, 114, 182, ${f * 0.5})`);
+    // Binding pulse ring (recently formed binding)
+    const bindPulse = (Math.sin((animT || 0) / 220 + y * 0.04) + 1) * 0.5;
+    ctx.strokeStyle = `rgba(244, 114, 182, ${(0.3 + bindPulse * 0.3) * f})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x - 10, y, 14 + bindPulse * 4, 0, Math.PI * 2); ctx.stroke();
+    // Outer pink glow
+    const gg = ctx.createRadialGradient(x - 10, y, 0, x - 10, y, 30);
+    gg.addColorStop(0, `rgba(244, 114, 182, ${f * 0.6})`);
     gg.addColorStop(1, 'rgba(244, 114, 182, 0)');
     ctx.fillStyle = gg;
-    ctx.beginPath(); ctx.arc(x - 10, y, 26, 0, Math.PI * 2); ctx.fill();
-    const cg = ctx.createRadialGradient(x - 12, y - 2, 0, x - 10, y, 8);
+    ctx.beginPath(); ctx.arc(x - 10, y, 30, 0, Math.PI * 2); ctx.fill();
+    // NT ball with detailed gradient
+    const cg = ctx.createRadialGradient(x - 12.5, y - 2.5, 0, x - 10, y, 8);
     cg.addColorStop(0, 'rgba(255,255,255,0.95)');
-    cg.addColorStop(0.4, C_NT);
-    cg.addColorStop(1, '#be3879');
+    cg.addColorStop(0.35, C_NT);
+    cg.addColorStop(1, '#a02868');
     ctx.fillStyle = cg;
     ctx.beginPath(); ctx.arc(x - 10, y, 8, 0, Math.PI * 2); ctx.fill();
+    // tiny specular highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath(); ctx.arc(x - 12, y - 2, 2.5, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
 }
 
-// Reuptake transporter — a vacuum / pump shape with mouth facing cleft
+// Reuptake transporter — protein channel with breathing pull, mouth facing cleft
 function drawTransporter(ctx, y, active, t) {
   const x = PRE_MEM_X;
   ctx.save();
-  // trunk inside bouton
-  ctx.fillStyle = 'rgba(20, 50, 50, 0.95)';
+
+  const phase = (t || 0) / 380 + y * 0.04;
+  const breath = (Math.sin(phase) + 1) * 0.5; // 0..1 slow
+
+  // soft outer halo when active (concentric breathing pulses)
+  if (active > 0.3) {
+    for (let i = 0; i < 3; i++) {
+      const off = ((phase * 0.5 + i * 0.33) % 1);
+      const r = 14 + off * 28;
+      const a = (1 - off) * 0.18 * active;
+      ctx.fillStyle = `rgba(94, 234, 212, ${a})`;
+      ctx.beginPath(); ctx.arc(x + 8, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // trunk inside bouton (with subtle gradient depth)
+  const trunkGrad = ctx.createLinearGradient(x - 22, 0, x, 0);
+  trunkGrad.addColorStop(0, 'rgba(12, 36, 38, 0.98)');
+  trunkGrad.addColorStop(1, 'rgba(28, 64, 64, 0.98)');
+  ctx.fillStyle = trunkGrad;
   roundRect(ctx, x - 22, y - 18, 22, 36, 6);
   ctx.fill();
-  // outer mouth
-  const armColor = active > 0.4 ? C_TRANS : 'rgba(94, 234, 212, 0.5)';
-  ctx.fillStyle = armColor;
-  // top arm (cup)
+
+  // outer arms with gradient (face into cleft)
+  const armGrad = ctx.createLinearGradient(x, 0, x + 22, 0);
+  if (active > 0.4) {
+    armGrad.addColorStop(0, 'rgba(56, 178, 172, 1)');
+    armGrad.addColorStop(1, 'rgba(94, 234, 212, 1)');
+  } else {
+    armGrad.addColorStop(0, 'rgba(56, 178, 172, 0.6)');
+    armGrad.addColorStop(1, 'rgba(94, 234, 212, 0.7)');
+  }
+  ctx.fillStyle = armGrad;
+  // top arm
   ctx.beginPath();
   ctx.moveTo(x - 2, y - 22);
   ctx.lineTo(x + 22, y - 16);
@@ -731,6 +792,7 @@ function drawTransporter(ctx, y, active, t) {
   ctx.lineTo(x - 2, y - 4);
   ctx.closePath();
   ctx.fill();
+  // bottom arm
   ctx.beginPath();
   ctx.moveTo(x - 2, y + 22);
   ctx.lineTo(x + 22, y + 16);
@@ -738,8 +800,20 @@ function drawTransporter(ctx, y, active, t) {
   ctx.lineTo(x - 2, y + 4);
   ctx.closePath();
   ctx.fill();
-  // dark interior pore
-  ctx.fillStyle = 'rgba(10, 28, 28, 0.95)';
+
+  // arm highlight (top edge, soft white)
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x - 2, y - 22); ctx.lineTo(x + 22, y - 16);
+  ctx.moveTo(x - 2, y + 22); ctx.lineTo(x + 22, y + 16);
+  ctx.stroke();
+
+  // dark interior pore with depth gradient
+  const poreGrad = ctx.createLinearGradient(x - 2, 0, x + 22, 0);
+  poreGrad.addColorStop(0, 'rgba(4, 14, 14, 1)');
+  poreGrad.addColorStop(1, 'rgba(20, 50, 50, 0.9)');
+  ctx.fillStyle = poreGrad;
   ctx.beginPath();
   ctx.moveTo(x - 2, y - 4);
   ctx.lineTo(x + 22, y - 4);
@@ -747,21 +821,25 @@ function drawTransporter(ctx, y, active, t) {
   ctx.lineTo(x - 2, y + 4);
   ctx.closePath();
   ctx.fill();
-  // pulsing pull glow when active
+
+  // when active, draw a flowing inward streak inside the pore
   if (active > 0.3) {
-    const pulse = (Math.sin((t || 0) / 250 + y * 0.05) + 1) * 0.5;
-    const r = 26 + pulse * 8;
-    const gg = ctx.createRadialGradient(x + 14, y, 0, x + 14, y, r);
-    gg.addColorStop(0, `rgba(94, 234, 212, ${0.45 * (1 - pulse * 0.4)})`);
-    gg.addColorStop(1, 'rgba(94, 234, 212, 0)');
-    ctx.fillStyle = gg;
-    ctx.beginPath(); ctx.arc(x + 14, y, r, 0, Math.PI * 2); ctx.fill();
-    // pulling arrow inside the pore
-    ctx.fillStyle = `rgba(94, 234, 212, ${0.6 + pulse * 0.4})`;
+    const flow = (phase * 0.8) % 1;
+    for (let i = 0; i < 3; i++) {
+      const f = (flow + i * 0.33) % 1;
+      const sx = x + 22 - f * 26; // moves from right (cleft) to left (interior)
+      const a = Math.sin(f * Math.PI) * 0.85 * active;
+      ctx.fillStyle = `rgba(180, 255, 240, ${a})`;
+      ctx.beginPath();
+      ctx.ellipse(sx, y, 3, 1.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // inward chevron at the pore exit
+    ctx.fillStyle = `rgba(180, 255, 240, ${0.5 + breath * 0.4})`;
     ctx.beginPath();
-    ctx.moveTo(x + 16, y - 6);
+    ctx.moveTo(x + 4, y - 5);
     ctx.lineTo(x - 4, y);
-    ctx.lineTo(x + 16, y + 6);
+    ctx.lineTo(x + 4, y + 5);
     ctx.closePath();
     ctx.fill();
   }
@@ -1085,28 +1163,87 @@ class SSRI {
 // =====================================================
 //  Label helper
 // =====================================================
-function drawLabel(ctx, text, lx, ly, tx, ty, color = '#ffd166', fontSize = 16) {
+function drawLabel(ctx, text, lx, ly, tx, ty, color = '#ffd166', fontSize = 14) {
+  // Convert hex color to rgb for gradient stops
+  function hexToRgb(h) {
+    const c = h.replace('#', '');
+    return [parseInt(c.substr(0,2),16), parseInt(c.substr(2,2),16), parseInt(c.substr(4,2),16)];
+  }
+  const [r, g, b] = hexToRgb(color);
   ctx.save();
-  ctx.font = `700 ${fontSize}px -apple-system, system-ui`;
+
+  // Tapered fading leader: gradient from label color → transparent at the dot
+  const leaderGrad = ctx.createLinearGradient(lx, ly, tx, ty);
+  leaderGrad.addColorStop(0, `rgba(${r},${g},${b},0.85)`);
+  leaderGrad.addColorStop(1, `rgba(${r},${g},${b},0.25)`);
+  ctx.strokeStyle = leaderGrad;
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(lx, ly);
+  ctx.lineTo(tx, ty);
+  ctx.stroke();
+
+  // Pulsing target ring at the anchor point
+  const pulse = (Math.sin((animT || 0) / 400) + 1) * 0.5;
+  // outer pulsing ring
+  ctx.strokeStyle = `rgba(${r},${g},${b},${0.3 + pulse * 0.3})`;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(tx, ty, 8 + pulse * 3, 0, Math.PI * 2);
+  ctx.stroke();
+  // soft glow
+  const dotGlow = ctx.createRadialGradient(tx, ty, 0, tx, ty, 14);
+  dotGlow.addColorStop(0, `rgba(${r},${g},${b},0.55)`);
+  dotGlow.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  ctx.fillStyle = dotGlow;
+  ctx.beginPath(); ctx.arc(tx, ty, 14, 0, Math.PI * 2); ctx.fill();
+  // solid core dot
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(tx, ty, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.beginPath(); ctx.arc(tx - 0.8, ty - 0.8, 1.4, 0, Math.PI * 2); ctx.fill();
+
+  // Glassmorphic label pill
+  ctx.font = `600 ${fontSize}px -apple-system, system-ui`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
-  ctx.lineWidth = 1.4;
-  ctx.setLineDash([4, 4]);
-  ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(tx, ty); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle = color;
-  ctx.beginPath(); ctx.arc(tx, ty, 4, 0, Math.PI * 2); ctx.fill();
   const m = ctx.measureText(text);
-  const padX = 10;
+  const padX = 14, padY = 8;
   const bw = m.width + padX * 2;
-  const bh = fontSize + 12;
-  ctx.fillStyle = 'rgba(16, 24, 48, 0.9)';
-  ctx.strokeStyle = `${color}aa`;
+  const bh = fontSize + padY * 2;
+  const bx = lx - bw / 2, by = ly - bh / 2;
+
+  // Drop shadow
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = `rgba(${r},${g},${b},0.35)`;
+  ctx.shadowOffsetY = 3;
+
+  // Frosted glass body — vertical gradient
+  const bgGrad = ctx.createLinearGradient(0, by, 0, by + bh);
+  bgGrad.addColorStop(0, 'rgba(28, 32, 48, 0.92)');
+  bgGrad.addColorStop(1, 'rgba(14, 18, 30, 0.92)');
+  ctx.fillStyle = bgGrad;
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, bh / 2); ctx.fill(); }
+  else { ctx.fillRect(bx, by, bw, bh); }
+
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  // Subtle accent border + top highlight
+  ctx.strokeStyle = `rgba(${r},${g},${b},0.55)`;
   ctx.lineWidth = 1;
-  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(lx - bw / 2, ly - bh / 2, bw, bh, 8); ctx.fill(); ctx.stroke(); }
-  else { ctx.fillRect(lx - bw / 2, ly - bh / 2, bw, bh); ctx.strokeRect(lx - bw / 2, ly - bh / 2, bw, bh); }
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, bh / 2); ctx.stroke(); }
+  // glossy top highlight
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(bx + 1, by + 1, bw - 2, bh / 2, bh / 2 - 1);
+  ctx.stroke();
+
+  // Text — with subtle letter spacing via spaces in font features (just clean text)
   ctx.fillStyle = color;
-  ctx.fillText(text, lx, ly);
+  ctx.fillText(text, lx, ly + 0.5);
+
   ctx.restore();
 }
 
