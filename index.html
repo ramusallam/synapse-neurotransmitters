@@ -1926,7 +1926,7 @@ const sceneReleaseBindFire = {
   },
   update(dt) {
     sceneLocal.cycleT += dt;
-    const cycle = 8500;
+    const cycle = 9500;
     const phase = (sceneLocal.cycleT % cycle) / cycle;
 
     // cycle reset
@@ -2000,19 +2000,19 @@ const sceneReleaseBindFire = {
       sceneLocal.ignition = 1;
     }
 
-    // RELEASE PHASE — NTs fall off the receptors and drift back into the cleft,
+    // RELEASE PHASE — NTs fall off the receptors and drift back through the cleft,
     // setting up reuptake in the next step
-    if (phase >= 0.82 && sceneLocal.lastPhase < 0.82) {
+    if (phase >= 0.72 && sceneLocal.lastPhase < 0.72) {
       sceneLocal.receptors.forEach(r => {
         if (r.slot && r.slot.state === 'bound') {
           const nt = r.slot;
           nt.state = 'free';
           nt.x = POST_MEM_X - 22;
           nt.y = r.y + (Math.random() - 0.5) * 10;
-          nt.vx = -0.5 - Math.random() * 0.25;  // strong leftward push off the receptor
+          nt.vx = -0.7 - Math.random() * 0.3;   // stronger leftward push off the receptor
           nt.vy = (Math.random() - 0.5) * 0.25;
-          nt.driftX = -0.012;                    // sustained leftward drift
-          nt.jitter = 0.04;
+          nt.driftX = -0.022;                   // sustained leftward drift (eq vx ≈ -0.73)
+          nt.jitter = 0.03;
           r.slot = null;
           r.target = 0;
           r.bound = 0;
