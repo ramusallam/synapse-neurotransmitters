@@ -2011,10 +2011,134 @@ const sceneNeuroplasticity = {
 };
 
 // =====================================================
-//  SCENE 10: SSRIs / Zoloft
+//  SCENE 10: Common Neurotransmitters
+// =====================================================
+const sceneCommonNTs = {
+  phase: 'Step 10: Common Neurotransmitters',
+  phaseColor: '#a855f7',
+  notes: "Same machinery, different chemicals. The neurotransmitter you release decides what the signal <em>does</em>. <strong>Dopamine</strong> drives motivation and reward. <strong>Serotonin</strong> stabilizes mood. <strong>Endorphins</strong> dull pain and create a natural high. <strong>Glutamate</strong> is the brain's GO signal. <strong>GABA</strong> is the brain's STOP signal. <strong>Acetylcholine</strong> moves muscles and sharpens attention.",
+  notebook: "List all six neurotransmitters and the main job of each. Star one you have heard about before. These are the ones we will keep coming back to.",
+  setup() {
+    clearField();
+    const cards = [
+      { name: 'DOPAMINE',      role: 'motivation · reward · focus', color: '#f472b6' },
+      { name: 'SEROTONIN',     role: 'mood · calm · sleep',         color: '#5cc9ff' },
+      { name: 'ENDORPHINS',    role: 'pain relief · natural high',  color: '#ffd166' },
+      { name: 'GLUTAMATE',     role: 'GO signal · info processing', color: '#ff7a6b' },
+      { name: 'GABA',          role: 'STOP signal · calm',          color: '#5eead4' },
+      { name: 'ACETYLCHOLINE', role: 'muscles · memory · attention',color: '#b084ff' }
+    ];
+    sceneLocal = {
+      cards,
+      time: 0,
+      particles: cards.map(c => Array.from({ length: 7 }, () => ({
+        x: Math.random() * 90,
+        y: Math.random() * 90,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        r: 3 + Math.random() * 2,
+        c: c.color
+      })))
+    };
+  },
+  update(dt) {
+    sceneLocal.time += dt;
+    sceneLocal.particles.forEach(group => {
+      group.forEach(p => {
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < 0 || p.x > 90) p.vx *= -1;
+        if (p.y < 0 || p.y > 90) p.vy *= -1;
+      });
+    });
+  },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+
+    // Header
+    ctx.save();
+    ctx.fillStyle = 'rgba(245, 245, 245, 0.92)';
+    ctx.font = '900 28px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('COMMON NEUROTRANSMITTERS', W / 2, 50);
+    ctx.font = '500 14px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(160, 160, 160, 0.85)';
+    ctx.fillText('different chemicals, different jobs', W / 2, 75);
+    ctx.restore();
+
+    // 2 rows × 3 cards
+    const cardW = 480, cardH = 230, gap = 30;
+    const startX = (W - 3 * cardW - 2 * gap) / 2;
+    const startY = 105;
+
+    sceneLocal.cards.forEach((card, i) => {
+      const col = i % 3, row = Math.floor(i / 3);
+      const cx = startX + col * (cardW + gap);
+      const cy = startY + row * (cardH + gap);
+
+      // card background
+      ctx.fillStyle = 'rgba(20, 20, 20, 0.7)';
+      ctx.strokeStyle = card.color + '88';
+      ctx.lineWidth = 2;
+      if (ctx.roundRect) {
+        ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 14); ctx.fill(); ctx.stroke();
+      } else {
+        ctx.fillRect(cx, cy, cardW, cardH);
+        ctx.strokeRect(cx, cy, cardW, cardH);
+      }
+
+      // floating background particles
+      const group = sceneLocal.particles[i];
+      group.forEach(p => {
+        const px = cx + 30 + p.x;
+        const py = cy + 70 + p.y;
+        const gr = ctx.createRadialGradient(px, py, 0, px, py, p.r * 4);
+        gr.addColorStop(0, card.color + '70');
+        gr.addColorStop(1, card.color + '00');
+        ctx.fillStyle = gr;
+        ctx.beginPath(); ctx.arc(px, py, p.r * 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = card.color;
+        ctx.beginPath(); ctx.arc(px, py, p.r, 0, Math.PI * 2); ctx.fill();
+      });
+
+      // big NT ball
+      const iconX = cx + 90, iconY = cy + cardH / 2;
+      const pulse = (Math.sin(sceneLocal.time / 600 + i) + 1) * 0.5;
+      const r = 30 + pulse * 4;
+      const gg = ctx.createRadialGradient(iconX, iconY, 0, iconX, iconY, r * 2.2);
+      gg.addColorStop(0, card.color + 'aa');
+      gg.addColorStop(1, card.color + '00');
+      ctx.fillStyle = gg;
+      ctx.beginPath(); ctx.arc(iconX, iconY, r * 2.2, 0, Math.PI * 2); ctx.fill();
+      const cgrad = ctx.createRadialGradient(iconX - r * 0.3, iconY - r * 0.3, 0, iconX, iconY, r);
+      cgrad.addColorStop(0, 'rgba(255,255,255,0.95)');
+      cgrad.addColorStop(0.4, card.color);
+      cgrad.addColorStop(1, card.color);
+      ctx.fillStyle = cgrad;
+      ctx.beginPath(); ctx.arc(iconX, iconY, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1; ctx.stroke();
+
+      // name
+      ctx.fillStyle = card.color;
+      ctx.font = '900 22px -apple-system, system-ui';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(card.name, cx + 160, cy + cardH / 2 - 16);
+
+      // role
+      ctx.fillStyle = 'rgba(245, 245, 245, 0.88)';
+      ctx.font = '500 14px -apple-system, system-ui';
+      ctx.fillText(card.role, cx + 160, cy + cardH / 2 + 12);
+    });
+  }
+};
+
+// =====================================================
+//  SCENE 11: SSRIs / Zoloft
 // =====================================================
 const sceneSSRI = {
-  phase: 'Step 10: How Zoloft Works (SSRIs)',
+  phase: 'Step 11: How Zoloft Works (SSRIs)',
   phaseColor: '#7dd3fc',
   notes: "<strong>Zoloft is an SSRI: Selective Serotonin Reuptake Inhibitor.</strong> It targets the <strong>serotonin transporters</strong> on the presynaptic membrane and <strong>blocks them</strong>. Important: <strong>it does NOT make MORE serotonin.</strong> It just stops the reuptake. The serotonin you already release stays in the synapse <strong>longer</strong>, so it binds receptors longer, so the mood-lifting signal lasts longer. That is how SSRIs help with depression.",
   notebook: "Draw transporters with SSRI molecules <strong>blocking</strong> them. Write: <strong>SSRI = Selective Serotonin Reuptake Inhibitor.</strong> SSRIs don't make more serotonin. They keep what you already have around longer.",
@@ -2213,7 +2337,8 @@ const scenes = [
   sceneZoomOut,        // 7
   sceneInteractive,    // 8
   sceneNeuroplasticity,// 9
-  sceneSSRI            // 10
+  sceneCommonNTs,      // 10
+  sceneSSRI            // 11
 ];
 
 // =====================================================
