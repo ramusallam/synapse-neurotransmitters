@@ -886,6 +886,7 @@ class NT {
     this.boundReceptor = null;
     this.trail = [];
     this.jitter = 0.18;  // brownian jitter strength; lower = smoother drift
+    this.driftX = 0;     // per-frame rightward bias (used to make NTs travel as a group)
   }
   update(dt) {
     this.trail.unshift({ x: this.x, y: this.y });
@@ -915,6 +916,7 @@ class NT {
     if (this.state === 'bound') { this.bondT += dt; return; }
     if (this.state === 'recycled') return;
     // free drift
+    this.vx += this.driftX;  // sustained directional bias (group movement)
     this.vx += (Math.random() - 0.5) * this.jitter;
     this.vy += (Math.random() - 0.5) * this.jitter;
     this.vx *= 0.97;
@@ -1163,8 +1165,9 @@ class Enzyme {
     this.x = x; this.y = y;
     this.vx = (Math.random() - 0.5) * 0.3;
     this.vy = opts.rising ? -0.2 : (Math.random() - 0.5) * 0.4;
-    this.r = 13;
+    this.r = 15;
     this.mouthPhase = Math.random() * Math.PI * 2;
+    this.mouthAngle = 0;       // direction the mouth faces (radians)
     this.eatFlash = 0;
     this.blocked = false;
     this.rising = opts.rising || false;
@@ -1174,7 +1177,7 @@ class Enzyme {
     this.mouthPhase += dt / 180;
     if (this.eatFlash > 0) this.eatFlash = Math.max(0, this.eatFlash - dt / 280);
 
-    // SEEKING — actively hunt the nearest free NT in the cleft
+    // SEEKING — actively hunt the nearest free NT in the cleft, mouth tracks target
     if (this.seeking && !this.blocked) {
       let nearest = null, ndist = 9999;
       if (nts) {
@@ -1191,11 +1194,18 @@ class Enzyme {
         if (dist > 0.1) {
           this.vx += (dx / dist) * 0.08;
           this.vy += (dy / dist) * 0.08;
+          // smoothly rotate mouth to face the target
+          const targetAngle = Math.atan2(dy, dx);
+          let diff = targetAngle - this.mouthAngle;
+          while (diff > Math.PI) diff -= 2 * Math.PI;
+          while (diff < -Math.PI) diff += 2 * Math.PI;
+          this.mouthAngle += diff * 0.12;
         }
       } else {
-        // no prey — gentle drift
+        // no prey — slow scan, mouth rotates gently looking around
         this.vx += (Math.random() - 0.5) * 0.04;
         this.vy += (Math.random() - 0.5) * 0.04;
+        this.mouthAngle += 0.025;
       }
       this.vx *= 0.92; this.vy *= 0.92;
       const cap = 1.2;
@@ -1276,16 +1286,24 @@ class Enzyme {
   }
   draw(ctx) {
     const mouthOpen = 0.1 + (Math.sin(this.mouthPhase) + 1) * 0.30; // 0.1..0.7 rad
-    ctx.save();
+
+    // eat flash glow (no rotation, world space)
     if (this.eatFlash > 0) {
-      const gg = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r * 2.2);
-      gg.addColorStop(0, `rgba(252, 211, 77, ${this.eatFlash * 0.55})`);
+      ctx.save();
+      const gg = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r * 2.4);
+      gg.addColorStop(0, `rgba(252, 211, 77, ${this.eatFlash * 0.6})`);
       gg.addColorStop(1, 'rgba(252, 211, 77, 0)');
       ctx.fillStyle = gg;
-      ctx.beginPath(); ctx.arc(this.x, this.y, this.r * 2.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.r * 2.4, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
     }
-    // body — Pac-Man with mouth pointing right (toward NTs)
-    const bg = ctx.createRadialGradient(this.x - this.r * 0.4, this.y - this.r * 0.4, 0, this.x, this.y, this.r);
+
+    // body — rotated to face mouth direction
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.mouthAngle);
+
+    const bg = ctx.createRadialGradient(-this.r * 0.4, -this.r * 0.4, 0, 0, 0, this.r);
     if (this.blocked) {
       bg.addColorStop(0, 'rgba(190, 190, 195, 0.95)');
       bg.addColorStop(0.6, 'rgba(120, 120, 130, 0.95)');
@@ -1297,24 +1315,24 @@ class Enzyme {
     }
     ctx.fillStyle = bg;
     ctx.beginPath();
-    ctx.moveTo(this.x, this.y);
-    ctx.arc(this.x, this.y, this.r, mouthOpen, Math.PI * 2 - mouthOpen);
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, this.r, mouthOpen, Math.PI * 2 - mouthOpen);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = this.blocked ? 'rgba(40, 40, 45, 0.7)' : 'rgba(120, 80, 0, 0.6)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    // eye
+    // eye (above mouth direction in body's local space)
     ctx.fillStyle = this.blocked ? 'rgba(20,20,25,0.85)' : 'rgba(50, 30, 0, 0.95)';
-    ctx.beginPath(); ctx.arc(this.x - 1, this.y - 5, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-1, -6, 2.4, 0, Math.PI * 2); ctx.fill();
     // blocked X
     if (this.blocked) {
       ctx.strokeStyle = 'rgba(255, 80, 80, 0.95)';
       ctx.lineWidth = 3;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(this.x - 7, this.y - 7); ctx.lineTo(this.x + 7, this.y + 7);
-      ctx.moveTo(this.x + 7, this.y - 7); ctx.lineTo(this.x - 7, this.y + 7);
+      ctx.moveTo(-7, -7); ctx.lineTo(7, 7);
+      ctx.moveTo(7, -7); ctx.lineTo(-7, 7);
       ctx.stroke();
     }
     ctx.restore();
@@ -1928,10 +1946,11 @@ const sceneReleaseBindFire = {
         sceneLocal.released.add(i);
         for (let k = 0; k < 5; k++) {
           const nt = new NT(v.x + 14, v.y + (Math.random() - 0.5) * 16);
-          // smooth, gentle rightward glide so the group floats across visibly
-          nt.vx = 0.32 + Math.random() * 0.12;
-          nt.vy = (Math.random() - 0.5) * 0.18;
-          nt.jitter = 0.03;  // very smooth — minimal random walk
+          // smooth, sustained group movement across the cleft
+          nt.vx = 0.4;
+          nt.vy = (Math.random() - 0.5) * 0.08;
+          nt.jitter = 0.015;       // almost no random walk
+          nt.driftX = 0.018;       // gentle wind keeps the group gliding rightward
           sceneLocal.nts.push(nt);
         }
       }
@@ -2044,28 +2063,6 @@ const sceneReleaseBindFire = {
     // new action potential bolt traveling on postsynaptic side
     drawLightningBolt(ctx, POST_MEM_X + 60, W - 30, MID, sceneLocal.boltT, sceneLocal.sparkles);
 
-    // staged header text — narrates the chain in four beats
-    ctx.save();
-    ctx.font = '700 16px -apple-system, system-ui';
-    ctx.textAlign = 'center';
-    const phase = (sceneLocal.cycleT % 8500) / 8500;
-    if (phase < 0.13) {
-      ctx.fillStyle = C_NT;
-      ctx.fillText('vesicles fuse → neurotransmitters released into the synapse', 480, 60);
-    } else if (phase < 0.45) {
-      ctx.fillStyle = C_NT;
-      ctx.fillText('the neurotransmitters float across the cleft as a group →', 580, 60);
-    } else if (phase < 0.62) {
-      ctx.fillStyle = C_PROT;
-      ctx.fillText('NTs bind receptors (ball-in-socket) → Na⁺ floods IN', 600, 60);
-    } else if (phase < 0.70) {
-      ctx.fillStyle = '#ffd166';
-      ctx.fillText('Na⁺ becomes the new electrical signal →', POST_MEM_X + 220, 60);
-    } else {
-      ctx.fillStyle = '#ffd166';
-      ctx.fillText('signal continues down the next neuron →', POST_MEM_X + 220, 60);
-    }
-    ctx.restore();
   }
 };
 
@@ -2099,11 +2096,10 @@ const sceneReuptake = {
       assigned: 0    // count of NTs heading to this vesicle
     }));
     const transporters = TRANS_YS.map(y => ({ y, busy: false, busyT: 0 }));
-    // enzymes — Pac-Man hunters that chase down free NTs in the cleft
+    // enzymes — two Pac-Man hunters; mouths rotate to face NTs as they chase
     const enzymes = [
-      new Enzyme(810, 250, { seeking: true }),
-      new Enzyme(850, 330, { seeking: true }),
-      new Enzyme(820, 410, { seeking: true })
+      new Enzyme(820, 285, { seeking: true }),
+      new Enzyme(820, 380, { seeking: true })
     ];
     sceneLocal = { nts, vesicles, transporters, enzymes, time: 0 };
   },
