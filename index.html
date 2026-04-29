@@ -1459,15 +1459,64 @@ const sceneCalcium = {
     sceneLocal = {
       vesicles: ves, calciums: ca,
       channels: CA_CHANNEL_YS.map(y => ({ y, openness: 0, target: 0 })),
+      cycleT: 0,
+      boltProgress: 0,
+      naSputters: [],
+      sputterEmitted: false,
       apArrived: 0
     };
   },
   update(dt) {
-    sceneLocal.apArrived = Math.min(1, sceneLocal.apArrived + dt / 600);
+    // 4-second loop: bolt arrives → Na⁺ sputters → Ca²⁺ pours in → reset
+    sceneLocal.cycleT += dt;
+    const cycle = 4000;
+    const phase = (sceneLocal.cycleT % cycle) / cycle;
+    const justWrapped = phase < 0.05 && (sceneLocal.lastPhase || 0) > 0.7;
+    sceneLocal.lastPhase = phase;
+    if (justWrapped) {
+      sceneLocal.boltProgress = 0;
+      sceneLocal.naSputters = [];
+      sceneLocal.sputterEmitted = false;
+      sceneLocal.channels.forEach(c => { c.openness = 0; c.target = 0; });
+      // re-create calciums in cleft
+      sceneLocal.calciums = [];
+      for (let i = 0; i < 12; i++) {
+        const cy = ACT_TOP + 20 + Math.random() * (ACT_BOT - ACT_TOP - 40);
+        const cx = PRE_MEM_X + 20 + Math.random() * (POST_MEM_X - PRE_MEM_X - 40);
+        sceneLocal.calciums.push(new Calcium(cx, cy, 'outside'));
+      }
+    }
+
+    // bolt travels in during phase 0.0 → 0.35
+    sceneLocal.boltProgress = clamp(phase / 0.35, 0, 1);
+
+    // Na⁺ sputter inside the bouton at the moment the bolt arrives (phase ~0.32)
+    if (phase > 0.32 && !sceneLocal.sputterEmitted) {
+      sceneLocal.sputterEmitted = true;
+      for (let i = 0; i < 8; i++) {
+        sceneLocal.naSputters.push({
+          x: 230 + Math.random() * 110,
+          y: MID + (Math.random() - 0.5) * 90,
+          vx: (Math.random() - 0.5) * 1.5,
+          vy: (Math.random() - 0.5) * 1.5,
+          life: 1
+        });
+      }
+    }
+    sceneLocal.naSputters.forEach(n => {
+      n.x += n.vx; n.y += n.vy;
+      n.vx *= 0.96; n.vy *= 0.96;
+      n.life -= 0.014;
+    });
+    sceneLocal.naSputters = sceneLocal.naSputters.filter(n => n.life > 0);
+
+    // Ca²⁺ channels open just AFTER the sputter (phase 0.45+)
     sceneLocal.channels.forEach((c, i) => {
-      if (sceneLocal.apArrived > 0.4 + i * 0.05) c.target = 1;
+      if (phase > 0.45 + i * 0.03) c.target = 1;
       c.openness = lerp(c.openness, c.target, 0.08);
     });
+    sceneLocal.apArrived = clamp((phase - 0.32) / 0.2, 0, 1);
+
     sceneLocal.calciums.forEach(c => {
       if (c.state === 'free' && c.region === 'outside') {
         for (const ch of sceneLocal.channels) {
@@ -1487,26 +1536,66 @@ const sceneCalcium = {
     drawPresynapticTerminal(ctx);
     drawPostsynapticDendrite(ctx);
 
+    // INCOMING BOLT from the left, ripping down the axon stem into the bouton
+    if (sceneLocal.boltProgress > 0) {
+      drawLightningBolt(ctx, 0, 320, MID, sceneLocal.boltProgress, []);
+    }
+
+    // bouton interior flash when AP just arrived
     if (sceneLocal.apArrived > 0) {
       ctx.save();
-      ctx.fillStyle = `rgba(255, 209, 102, ${0.06 + Math.sin(animT / 120) * 0.04})`;
+      const fade = Math.max(0, 1 - sceneLocal.apArrived * 1.4);
+      ctx.fillStyle = `rgba(255, 209, 102, ${0.10 * fade + 0.04})`;
       ctx.fillRect(220, ACT_TOP - 30, PRE_MEM_X - 220, ACT_BOT - ACT_TOP + 60);
       ctx.restore();
     }
 
     sceneLocal.vesicles.forEach(v => v.draw(ctx));
+
+    // Na⁺ SPUTTER — the reminder that sodium is what drove the AP
+    sceneLocal.naSputters.forEach(n => {
+      ctx.save();
+      ctx.globalAlpha = n.life;
+      const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 20);
+      g.addColorStop(0, 'rgba(255, 122, 107, 0.6)');
+      g.addColorStop(1, 'rgba(255, 122, 107, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(n.x, n.y, 20, 0, Math.PI * 2); ctx.fill();
+      const cg = ctx.createRadialGradient(n.x - 2, n.y - 2, 0, n.x, n.y, 7);
+      cg.addColorStop(0, 'rgba(255,255,255,0.95)');
+      cg.addColorStop(0.4, C_NA);
+      cg.addColorStop(1, '#c43c30');
+      ctx.fillStyle = cg;
+      ctx.beginPath(); ctx.arc(n.x, n.y, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.font = '700 9px -apple-system, system-ui';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('Na⁺', n.x, n.y + 0.5);
+      ctx.restore();
+    });
+
     sceneLocal.channels.forEach(c => drawCalciumChannel(ctx, c.y, c.openness));
     TRANS_YS.forEach(y => drawTransporter(ctx, y, 0, t));
     RECEPTOR_YS.forEach(y => drawReceptor(ctx, y, 0));
     sceneLocal.calciums.forEach(c => c.draw(ctx));
 
+    // header — staged messaging based on cycle phase
     ctx.save();
-    ctx.fillStyle = '#ffd166';
-    ctx.font = '700 17px -apple-system, system-ui';
+    ctx.font = '700 16px -apple-system, system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('action potential arrives →', 280, 60);
-    ctx.fillStyle = C_CA;
-    ctx.fillText('Ca²⁺ floods IN', PRE_MEM_X - 80, 60);
+    const phase = (sceneLocal.cycleT % 4000) / 4000;
+    if (phase < 0.32) {
+      ctx.fillStyle = '#ffd166';
+      ctx.fillText('action potential travels in →', 220, 50);
+    } else if (phase < 0.5) {
+      ctx.fillStyle = C_NA;
+      ctx.fillText('Na⁺ pulse — the AP is sodium', 280, 50);
+    } else {
+      ctx.fillStyle = C_NA;
+      ctx.fillText('Na⁺ →', 230, 50);
+      ctx.fillStyle = C_CA;
+      ctx.fillText('opens Ca²⁺ channels → Ca²⁺ floods IN', 540, 50);
+    }
     ctx.restore();
   }
 };
@@ -1608,13 +1697,33 @@ const sceneBindFire = {
       nts.push(new NT(x, y));
     }
     const receptors = RECEPTOR_YS.map(y => ({ y, bound: 0, target: 0, slot: null }));
-    sceneLocal = { nts, receptors, naIons: [], boltT: 0, cycleT: 0, sparkles: [] };
+    sceneLocal = { nts, receptors, naIons: [], boltT: 0, cycleT: 0, sparkles: [], ignition: 0 };
   },
   update(dt) {
     sceneLocal.cycleT += dt;
-    const cycle = 2400;
+    const cycle = 2800;
     const phase = (sceneLocal.cycleT % cycle) / cycle;
-    sceneLocal.boltT = clamp(phase / 0.85, 0, 1);
+    // 0..0.25: Na⁺ accumulates (no bolt). 0.25..0.32: ignition flash. 0.32..0.95: bolt travels.
+    if (phase < 0.25) {
+      sceneLocal.boltT = 0;
+      sceneLocal.ignition = 0;
+    } else if (phase < 0.32) {
+      const f = (phase - 0.25) / 0.07;
+      sceneLocal.boltT = 0;
+      sceneLocal.ignition = 1 - f;
+      // emit Na⁺ accumulation tightly at the active zone face during ignition
+    } else {
+      sceneLocal.boltT = clamp((phase - 0.32) / 0.6, 0, 1);
+      sceneLocal.ignition = Math.max(0, sceneLocal.ignition - dt / 250);
+    }
+    // catch ignition trigger moment
+    if (phase < 0.05 && (sceneLocal.lastPhase || 0) > 0.7) {
+      sceneLocal.ignition = 0;
+    }
+    if (phase >= 0.25 && (sceneLocal.lastPhase || 0) < 0.25) {
+      sceneLocal.ignition = 1;
+    }
+    sceneLocal.lastPhase = phase;
     sceneLocal.receptors.forEach(r => {
       if (r.slot == null && r.target < 0.5) {
         const candidate = sceneLocal.nts.find(n => n.state === 'free');
@@ -1679,14 +1788,43 @@ const sceneBindFire = {
       ctx.restore();
     });
 
+    // ignition flash at active zone — the moment Na⁺ becomes the new electrical signal
+    if (sceneLocal.ignition > 0) {
+      ctx.save();
+      const f = sceneLocal.ignition;
+      const fx = POST_MEM_X + 50;
+      const fy = MID;
+      const r = 30 + (1 - f) * 90;
+      const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, r);
+      g.addColorStop(0, `rgba(255, 240, 180, ${0.85 * f})`);
+      g.addColorStop(0.4, `rgba(255, 209, 102, ${0.55 * f})`);
+      g.addColorStop(1, 'rgba(255, 209, 102, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(fx, fy, r, 0, Math.PI * 2); ctx.fill();
+      // bright core
+      ctx.fillStyle = `rgba(255, 255, 240, ${f * 0.9})`;
+      ctx.beginPath(); ctx.arc(fx, fy, 12 * f, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+
     // new action potential bolt traveling on postsynaptic side
     drawLightningBolt(ctx, POST_MEM_X + 60, W - 30, MID, sceneLocal.boltT, sceneLocal.sparkles);
 
+    // staged header text
     ctx.save();
-    ctx.fillStyle = C_PROT;
     ctx.font = '700 16px -apple-system, system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('NTs lock into receptors → Na⁺ floods IN → new action potential', POST_MEM_X + 200, 60);
+    const phase = (sceneLocal.cycleT % 2800) / 2800;
+    if (phase < 0.25) {
+      ctx.fillStyle = C_NA;
+      ctx.fillText('NTs lock into receptors → Na⁺ floods IN', POST_MEM_X + 200, 60);
+    } else if (phase < 0.4) {
+      ctx.fillStyle = '#ffd166';
+      ctx.fillText('Na⁺ becomes the new electrical signal →', POST_MEM_X + 220, 60);
+    } else {
+      ctx.fillStyle = '#ffd166';
+      ctx.fillText('new action potential travels →', POST_MEM_X + 220, 60);
+    }
     ctx.restore();
   }
 };
@@ -1697,8 +1835,8 @@ const sceneBindFire = {
 const sceneReuptake = {
   phase: 'Step 6: Reuptake',
   phaseColor: '#5eead4',
-  notes: "Once the message is passed, the synapse needs to <strong>reset</strong>. <strong>Reuptake transporters</strong> on the presynaptic membrane <strong>vacuum the leftover neurotransmitters back into the terminal</strong>. The NTs get repackaged into vesicles and the synapse is ready to fire again. Without reuptake, NTs would build up forever and never stop signaling.",
-  notebook: "Draw transporters <strong>vacuuming NTs back IN</strong> to the terminal. Label: <strong>REUPTAKE</strong>. Reuptake = the cleanup. The transporter is the vacuum.",
+  notes: "Once the message is passed, the synapse needs to <strong>reset</strong>. <strong>Reuptake transporters</strong> on the presynaptic membrane <strong>vacuum the leftover neurotransmitters back into the terminal</strong>. The NTs are then <strong>repackaged into vesicles</strong> so they can be used again. Without reuptake, NTs would build up forever and never stop signaling.",
+  notebook: "Draw transporters <strong>vacuuming NTs back IN</strong> to the terminal, then watch each NT load INTO an empty vesicle. Label: <strong>REUPTAKE → REPACKAGED</strong>. The same NTs get used over and over.",
   setup() {
     clearField();
     const nts = [];
@@ -1707,11 +1845,35 @@ const sceneReuptake = {
       const x = PRE_MEM_X + 20 + Math.random() * (POST_MEM_X - PRE_MEM_X - 40);
       nts.push(new NT(x, y));
     }
+    // empty vesicles waiting to be refilled
+    const vesPositions = [
+      { x: 380, y: 250 }, { x: 460, y: 220 }, { x: 540, y: 270 },
+      { x: 410, y: 320 }, { x: 500, y: 350 }, { x: 600, y: 310 },
+      { x: 380, y: 400 }, { x: 470, y: 420 }, { x: 560, y: 390 },
+      { x: 640, y: 270 }, { x: 640, y: 380 }
+    ];
+    const vesicles = vesPositions.map(p => ({
+      x: p.x, y: p.y, r: 18,
+      fillness: 0.2,  // start mostly empty so refill is visible
+      pulseT: 0,
+      assigned: 0    // count of NTs heading to this vesicle
+    }));
     const transporters = TRANS_YS.map(y => ({ y, busy: false, busyT: 0 }));
-    sceneLocal = { nts, transporters, time: 0 };
+    sceneLocal = { nts, vesicles, transporters, time: 0 };
   },
   update(dt) {
     sceneLocal.time += dt;
+
+    // keep the cleft populated so demo loops continuously
+    const cleftCount = sceneLocal.nts.filter(n => n.state === 'free').length;
+    if (cleftCount < 6 && Math.random() < 0.04) {
+      for (let i = 0; i < 2; i++) {
+        const y = ACT_TOP + 14 + Math.random() * (ACT_BOT - ACT_TOP - 28);
+        const x = PRE_MEM_X + 20 + Math.random() * 30;
+        sceneLocal.nts.push(new NT(x, y));
+      }
+    }
+
     sceneLocal.transporters.forEach(tr => {
       if (!tr.busy) {
         // grab nearest free NT
@@ -1723,23 +1885,93 @@ const sceneReuptake = {
           }
         });
         if (nearest) {
-          // pull through transporter into bouton interior
-          const dest = { x: PRE_MEM_X - 80 - Math.random() * 120, y: tr.y + (Math.random() - 0.5) * 60 };
-          nearest.setTransit(dest, 2.0 / 1000, 'reuptake');
-          tr.busy = true; tr.busyT = 0;
+          // pick the most empty vesicle near this transporter as the destination
+          const target = sceneLocal.vesicles
+            .filter(v => v.fillness + v.assigned * 0.16 < 1)
+            .sort((a, b) =>
+              ((a.fillness + a.assigned * 0.16) + Math.abs(a.y - tr.y) * 0.0015) -
+              ((b.fillness + b.assigned * 0.16) + Math.abs(b.y - tr.y) * 0.0015))[0];
+          if (target) {
+            target.assigned += 1;
+            nearest.targetVesicle = target;
+            nearest.setTransit({ x: target.x, y: target.y }, 1.6 / 1000, 'reuptake');
+            tr.busy = true; tr.busyT = 0;
+          }
         }
       } else {
         tr.busyT += dt;
-        if (tr.busyT > 600) tr.busy = false;
+        if (tr.busyT > 500) tr.busy = false;
       }
     });
-    sceneLocal.nts.forEach(n => n.update(dt));
+
+    // update NTs; when a reuptake-bound NT arrives at its vesicle, fill it
+    sceneLocal.nts.forEach(n => {
+      const wasTransit = n.state === 'transitTo';
+      n.update(dt);
+      if (wasTransit && n.state === 'recycled' && n.targetVesicle) {
+        n.targetVesicle.fillness = Math.min(1, n.targetVesicle.fillness + 0.16);
+        n.targetVesicle.pulseT = 1;
+        n.targetVesicle.assigned = Math.max(0, n.targetVesicle.assigned - 1);
+        n.targetVesicle = null;
+      }
+    });
+
+    // drain pulses; full vesicles slowly release one NT back to the cleft (continuous cycle)
+    sceneLocal.vesicles.forEach(v => {
+      if (v.pulseT > 0) v.pulseT = Math.max(0, v.pulseT - dt / 600);
+      if (v.fillness >= 0.95 && Math.random() < 0.0025) {
+        v.fillness -= 0.18;
+        const nt = new NT(v.x + 12, v.y);
+        nt.vx = 0.8 + Math.random() * 0.6;
+        nt.vy = (Math.random() - 0.5) * 0.5;
+        sceneLocal.nts.push(nt);
+      }
+    });
+
+    // garbage-collect 'recycled' NTs to keep the array small
+    sceneLocal.nts = sceneLocal.nts.filter(n => n.state !== 'recycled');
   },
   draw(ctx, t) {
     ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, W, H);
     drawPresynapticTerminal(ctx);
     drawPostsynapticDendrite(ctx);
+
+    // RECYCLING vesicles: variable fillness + pulse when refilled
+    sceneLocal.vesicles.forEach(v => {
+      ctx.save();
+      const scale = 1 + v.pulseT * 0.18;
+      const r = v.r * scale;
+      // membrane
+      const g = ctx.createRadialGradient(v.x - r * 0.3, v.y - r * 0.3, 0, v.x, v.y, r);
+      g.addColorStop(0, 'rgba(255, 245, 220, 0.85)');
+      g.addColorStop(0.7, 'rgba(255, 220, 170, 0.65)');
+      g.addColorStop(1, 'rgba(212, 165, 84, 0.45)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(v.x, v.y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 209, 102, 0.85)';
+      ctx.lineWidth = 1.5; ctx.stroke();
+      // pink pulse halo when just refilled
+      if (v.pulseT > 0) {
+        const ph = ctx.createRadialGradient(v.x, v.y, 0, v.x, v.y, r * 2.4);
+        ph.addColorStop(0, `rgba(244, 114, 182, ${v.pulseT * 0.55})`);
+        ph.addColorStop(1, 'rgba(244, 114, 182, 0)');
+        ctx.fillStyle = ph;
+        ctx.beginPath(); ctx.arc(v.x, v.y, r * 2.4, 0, Math.PI * 2); ctx.fill();
+      }
+      // NT cargo dots based on fillness (0..6 dots)
+      const dotCount = Math.round(v.fillness * 6);
+      ctx.fillStyle = C_NT;
+      for (let i = 0; i < dotCount; i++) {
+        const a = i * 1.04;
+        const rr = v.r * 0.5;
+        ctx.beginPath();
+        ctx.arc(v.x + Math.cos(a) * rr, v.y + Math.sin(a) * rr, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    });
+
     sceneLocal.nts.forEach(n => n.draw(ctx));
     RECEPTOR_YS.forEach(y => drawReceptor(ctx, y, 0));
     CA_CHANNEL_YS.forEach(y => drawCalciumChannel(ctx, y, 0));
@@ -1770,10 +2002,10 @@ const sceneReuptake = {
     ctx.fillStyle = C_TRANS;
     ctx.font = '900 22px -apple-system, system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('REUPTAKE', PRE_MEM_X + 5, 60);
+    ctx.fillText('REUPTAKE → REPACKAGED', PRE_MEM_X + 5, 60);
     ctx.font = '500 13px -apple-system, system-ui';
     ctx.fillStyle = 'rgba(94, 234, 212, 0.85)';
-    ctx.fillText('transporters vacuum NTs back into the terminal', PRE_MEM_X + 5, 82);
+    ctx.fillText('transporters vacuum NTs back IN, then load them into vesicles to use again', PRE_MEM_X + 5, 82);
     ctx.restore();
   }
 };
