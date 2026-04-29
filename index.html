@@ -3114,6 +3114,18 @@ function setupCaseSide(side, isMaoi) {
     new Enzyme(820, 330),
     new Enzyme(780, 410)
   ];
+  // vesicles inside the bouton — SSRI side starts low (no reuptake refilling)
+  // MAOI side starts low too but gets refilled via working transporters
+  const vesPositions = [
+    { x: 380, y: 250 }, { x: 460, y: 220 }, { x: 540, y: 270 },
+    { x: 410, y: 320 }, { x: 500, y: 350 }, { x: 600, y: 310 },
+    { x: 380, y: 400 }, { x: 470, y: 420 }, { x: 560, y: 390 }
+  ];
+  side.vesicles = vesPositions.map(p => ({
+    x: p.x, y: p.y, r: 18,
+    fillness: isMaoi ? 0.25 : 0.15,  // start low; MAOI side will fill, SSRI won't
+    pulseT: 0
+  }));
   side.naIons = [];
   side.apTrains = [];
   side.apTimer = 0;
@@ -3184,7 +3196,7 @@ function updateCaseSide(side, dt, isMaoi, time) {
     }
   });
 
-  // MAOI side: transporters work normally (reuptake)
+  // MAOI side: transporters work normally (reuptake), and NTs sneak back into vesicles
   if (isMaoi) {
     side.transporters.forEach(tr => {
       if (!tr.busy) {
@@ -3196,12 +3208,21 @@ function updateCaseSide(side, dt, isMaoi, time) {
           }
         });
         if (nearest) {
-          nearest.setTransit({ x: PRE_MEM_X - 60, y: tr.y + (Math.random() - 0.5) * 30 }, 1.6 / 1000, 'reuptake');
-          tr.busy = true; tr.busyT = 0;
+          // pick the most empty vesicle near this transporter as the destination
+          const target = side.vesicles
+            .filter(v => v.fillness < 1)
+            .sort((a, b) =>
+              (a.fillness + Math.abs(a.y - tr.y) * 0.0015) -
+              (b.fillness + Math.abs(b.y - tr.y) * 0.0015))[0];
+          if (target) {
+            nearest.targetVesicle = target;
+            nearest.setTransit({ x: target.x, y: target.y }, 1.5 / 1000, 'reuptake');
+            tr.busy = true; tr.busyT = 0;
+          }
         }
       } else {
         tr.busyT += dt;
-        if (tr.busyT > 600) tr.busy = false;
+        if (tr.busyT > 500) tr.busy = false;
       }
     });
   }
@@ -3215,8 +3236,21 @@ function updateCaseSide(side, dt, isMaoi, time) {
     side.nts.push(new NT(PRE_MEM_X + 30, y));
   }
 
-  side.nts.forEach(n => n.update(dt));
+  // update NTs; on MAOI side, when a reuptake-bound NT arrives at its vesicle, fill it
+  side.nts.forEach(n => {
+    const wasTransit = n.state === 'transitTo';
+    n.update(dt);
+    if (wasTransit && n.state === 'recycled' && n.targetVesicle) {
+      n.targetVesicle.fillness = Math.min(1, n.targetVesicle.fillness + 0.15);
+      n.targetVesicle.pulseT = 1;
+      n.targetVesicle = null;
+    }
+  });
   side.nts = side.nts.filter(n => n.state !== 'recycled');
+  // vesicle pulses fade
+  side.vesicles.forEach(v => {
+    if (v.pulseT > 0) v.pulseT = Math.max(0, v.pulseT - dt / 600);
+  });
   side.naIons.forEach(n => { n.x += n.vx; n.y += n.vy; n.life -= 0.005; });
   side.naIons = side.naIons.filter(n => n.life > 0 && n.x < W);
 
@@ -3246,6 +3280,38 @@ function updateCaseSide(side, dt, isMaoi, time) {
 function drawCaseSide(ctx, side, t, isMaoi) {
   drawPresynapticTerminal(ctx);
   drawPostsynapticDendrite(ctx);
+  // vesicles inside the bouton — show fillness so SSRI side stays low, MAOI side fills
+  side.vesicles.forEach(v => {
+    ctx.save();
+    const scale = 1 + v.pulseT * 0.18;
+    const r = v.r * scale;
+    const g = ctx.createRadialGradient(v.x - r * 0.3, v.y - r * 0.3, 0, v.x, v.y, r);
+    g.addColorStop(0, 'rgba(255, 245, 220, 0.85)');
+    g.addColorStop(0.7, 'rgba(255, 220, 170, 0.65)');
+    g.addColorStop(1, 'rgba(212, 165, 84, 0.45)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(v.x, v.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 209, 102, 0.85)';
+    ctx.lineWidth = 1.5; ctx.stroke();
+    if (v.pulseT > 0) {
+      const ph = ctx.createRadialGradient(v.x, v.y, 0, v.x, v.y, r * 2.4);
+      ph.addColorStop(0, `rgba(244, 114, 182, ${v.pulseT * 0.55})`);
+      ph.addColorStop(1, 'rgba(244, 114, 182, 0)');
+      ctx.fillStyle = ph;
+      ctx.beginPath(); ctx.arc(v.x, v.y, r * 2.4, 0, Math.PI * 2); ctx.fill();
+    }
+    // NT cargo dots based on fillness (0..6 dots)
+    const dotCount = Math.round(v.fillness * 6);
+    ctx.fillStyle = C_NT;
+    for (let i = 0; i < dotCount; i++) {
+      const a = i * 1.04;
+      const rr = v.r * 0.5;
+      ctx.beginPath();
+      ctx.arc(v.x + Math.cos(a) * rr, v.y + Math.sin(a) * rr, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  });
   side.nts.forEach(n => n.draw(ctx));
   side.receptors.forEach(r => drawReceptor(ctx, r.y, r.bound));
   CA_CHANNEL_YS.forEach(y => drawCalciumChannel(ctx, y, 0.3));
@@ -3340,19 +3406,16 @@ const sceneSSRI = {
     // ── LEFT: SSRI ──
     ctx.save();
     ctx.fillStyle = C_SSRI;
-    ctx.font = '900 22px -apple-system, system-ui';
+    ctx.font = '900 32px -apple-system, system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('SSRI', W / 4, 30);
-    ctx.font = '500 12px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(125, 211, 252, 0.85)';
-    ctx.fillText('blocks the REUPTAKE TRANSPORTER', W / 4, 50);
-    ctx.font = '600 12px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(245, 245, 245, 0.82)';
-    ctx.fillText('Zoloft · Prozac · Paxil · Lexapro · Celexa', W / 4, 70);
+    ctx.fillText('SSRI', W / 4, 38);
+    ctx.font = '600 16px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(245, 245, 245, 0.92)';
+    ctx.fillText('Zoloft · Prozac · Paxil · Lexapro · Celexa', W / 4, 64);
     ctx.restore();
     // animation, scaled and translated to left half
     ctx.save();
-    ctx.translate(0, 95);
+    ctx.translate(0, 90);
     ctx.scale(0.5, 0.5);
     drawCaseSide(ctx, sceneLocal.ssri, t, false);
     ctx.restore();
@@ -3360,26 +3423,23 @@ const sceneSSRI = {
     // ── RIGHT: MAOI ──
     ctx.save();
     ctx.fillStyle = '#fb923c';
-    ctx.font = '900 22px -apple-system, system-ui';
+    ctx.font = '900 32px -apple-system, system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('MAO INHIBITOR', W * 3 / 4, 30);
-    ctx.font = '500 12px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(251, 146, 60, 0.85)';
-    ctx.fillText('blocks the DEGRADING ENZYME (MAO)', W * 3 / 4, 50);
-    ctx.font = '600 12px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(245, 245, 245, 0.82)';
-    ctx.fillText('Nardil · Marplan · Parnate · Emsam', W * 3 / 4, 70);
+    ctx.fillText('MAO INHIBITOR', W * 3 / 4, 38);
+    ctx.font = '600 16px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(245, 245, 245, 0.92)';
+    ctx.fillText('Nardil · Marplan · Parnate · Emsam', W * 3 / 4, 64);
     ctx.restore();
     // animation
     ctx.save();
-    ctx.translate(W / 2, 95);
+    ctx.translate(W / 2, 90);
     ctx.scale(0.5, 0.5);
     drawCaseSide(ctx, sceneLocal.maoi, t, true);
     ctx.restore();
 
     // single takeaway line — bigger, cleaner
     ctx.save();
-    ctx.font = '700 19px -apple-system, system-ui';
+    ctx.font = '700 22px -apple-system, system-ui';
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(245, 245, 245, 0.95)';
     ctx.fillText('both → more serotonin signaling → relief from depression & anxiety', W / 2, H - 28);
