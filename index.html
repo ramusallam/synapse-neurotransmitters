@@ -1499,44 +1499,54 @@ const sceneNeuron = {
     drawFullNeuron(ctx);
     drawLightningBolt(ctx, sceneLocal.boltStart.x, sceneLocal.boltEnd.x, MID, sceneLocal.progress, sceneLocal.sparkles);
 
-    // burst at terminal arrival
+    // big arrival burst — engulfs the whole terminal cluster
     if (sceneLocal.arrived > 0) {
       ctx.save();
       const a = sceneLocal.arrived;
-      const r = 80 + a * 80;
-      const g = ctx.createRadialGradient(sceneLocal.boltEnd.x, sceneLocal.boltEnd.y, 0, sceneLocal.boltEnd.x, sceneLocal.boltEnd.y, r);
-      g.addColorStop(0, `rgba(255, 209, 102, ${0.7 * (1 - a)})`);
+      const cx = sceneLocal.boltEnd.x + 40;  // slightly into the cluster
+      const cy = sceneLocal.boltEnd.y;
+      const r = 130 + a * 150;  // grows from 130 → 280
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, `rgba(255, 240, 180, ${0.75 * (1 - a * 0.4)})`);
+      g.addColorStop(0.35, `rgba(255, 209, 102, ${0.55 * (1 - a)})`);
       g.addColorStop(1, 'rgba(255, 209, 102, 0)');
       ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(sceneLocal.boltEnd.x, sceneLocal.boltEnd.y, r, 0, Math.PI * 2); ctx.fill();
-      if (a > 0.2) {
-        ctx.fillStyle = `rgba(255, 209, 102, ${a})`;
-        ctx.font = '700 18px -apple-system, system-ui';
-        ctx.textAlign = 'center';
-        ctx.fillText('STOPS HERE', sceneLocal.boltEnd.x, sceneLocal.boltEnd.y - 130);
-      }
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      // bright impact core fading out
+      ctx.fillStyle = `rgba(255, 255, 240, ${(1 - a) * 0.85})`;
+      ctx.beginPath(); ctx.arc(sceneLocal.boltEnd.x, sceneLocal.boltEnd.y, 16 * (1 - a) + 4, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
 
-    // zoom-in highlight on terminal
+    // soft pulsing zoom box around the terminal cluster
     const hx = W - 200, hy = MID;
-    const hp = 1 + Math.sin(sceneLocal.pulse) * 0.08;
+    const hp = 1 + Math.sin(sceneLocal.pulse) * 0.05;
     ctx.save();
-    ctx.strokeStyle = `rgba(255, 209, 102, ${0.55 + Math.sin(sceneLocal.pulse) * 0.2})`;
+    ctx.strokeStyle = `rgba(255, 209, 102, ${0.45 + Math.sin(sceneLocal.pulse) * 0.18})`;
     ctx.lineWidth = 2.5;
     ctx.setLineDash([8, 5]);
-    ctx.strokeRect(hx - 130 * hp, hy - 95 * hp, 260 * hp, 190 * hp);
+    ctx.strokeRect(hx - 140 * hp, hy - 105 * hp, 280 * hp, 210 * hp);
     ctx.setLineDash([]);
-    ctx.fillStyle = '#ffd166';
-    ctx.font = '700 16px -apple-system, system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText('zoom in here →', hx, hy - 120);
     ctx.restore();
 
-    // anatomy labels
+    // STOPS HERE — large, BELOW the terminal cluster, appears after burst
+    if (sceneLocal.arrived > 0.3) {
+      const a = clamp((sceneLocal.arrived - 0.3) / 0.5, 0, 1);
+      ctx.save();
+      ctx.fillStyle = `rgba(255, 209, 102, ${a})`;
+      ctx.font = '900 22px -apple-system, system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('STOPS HERE', W - 200, MID + 200);
+      ctx.font = '500 12px -apple-system, system-ui';
+      ctx.fillStyle = `rgba(255, 209, 102, ${a * 0.7})`;
+      ctx.fillText("can't jump to the next neuron — needs a synapse", W - 200, MID + 222);
+      ctx.restore();
+    }
+
+    // anatomy labels — well separated, no overlap
     drawLabel(ctx, 'cell body', 340, MID + 170, 340, MID + 70);
-    drawLabel(ctx, 'axon', 740, MID - 70, 740, MID - 8);
-    drawLabel(ctx, 'axon terminals', W - 130, MID - 145, W - 200, MID - 60);
+    drawLabel(ctx, 'axon', 740, MID - 90, 740, MID - 8);
+    drawLabel(ctx, 'axon terminals', W - 220, 90, W - 160, MID - 60);
   }
 };
 
