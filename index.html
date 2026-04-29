@@ -1168,10 +1168,58 @@ class Enzyme {
     this.eatFlash = 0;
     this.blocked = false;
     this.rising = opts.rising || false;
+    this.seeking = opts.seeking || false;
   }
   update(dt, nts) {
     this.mouthPhase += dt / 180;
     if (this.eatFlash > 0) this.eatFlash = Math.max(0, this.eatFlash - dt / 280);
+
+    // SEEKING — actively hunt the nearest free NT in the cleft
+    if (this.seeking && !this.blocked) {
+      let nearest = null, ndist = 9999;
+      if (nts) {
+        for (const n of nts) {
+          if (n.state !== 'free') continue;
+          const d = Math.hypot(n.x - this.x, n.y - this.y);
+          if (d < ndist) { ndist = d; nearest = n; }
+        }
+      }
+      if (nearest) {
+        const dx = nearest.x - this.x;
+        const dy = nearest.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 0.1) {
+          this.vx += (dx / dist) * 0.08;
+          this.vy += (dy / dist) * 0.08;
+        }
+      } else {
+        // no prey — gentle drift
+        this.vx += (Math.random() - 0.5) * 0.04;
+        this.vy += (Math.random() - 0.5) * 0.04;
+      }
+      this.vx *= 0.92; this.vy *= 0.92;
+      const cap = 1.2;
+      const sp = Math.hypot(this.vx, this.vy);
+      if (sp > cap) { this.vx = this.vx / sp * cap; this.vy = this.vy / sp * cap; }
+      this.x += this.vx; this.y += this.vy;
+      // confine to cleft, stay clear of transporter path on the left
+      const minX = PRE_MEM_X + 55;
+      const maxX = POST_MEM_X - this.r - 6;
+      if (this.y < ACT_TOP + this.r) { this.y = ACT_TOP + this.r; this.vy = Math.abs(this.vy); }
+      if (this.y > ACT_BOT - this.r) { this.y = ACT_BOT - this.r; this.vy = -Math.abs(this.vy); }
+      if (this.x < minX) { this.x = minX; this.vx = Math.abs(this.vx) * 0.5; }
+      if (this.x > maxX) { this.x = maxX; this.vx = -Math.abs(this.vx) * 0.5; }
+      // chomp on contact
+      if (!nts) return;
+      for (const n of nts) {
+        if (n.state === 'free' && Math.hypot(n.x - this.x, n.y - this.y) < this.r + n.r + 2) {
+          n.state = 'recycled';
+          this.eatFlash = 1;
+          return;
+        }
+      }
+      return;
+    }
 
     if (this.rising && !this.blocked) {
       // steady upward drift with gentle horizontal sway, on the right side of the cleft
@@ -2051,12 +2099,11 @@ const sceneReuptake = {
       assigned: 0    // count of NTs heading to this vesicle
     }));
     const transporters = TRANS_YS.map(y => ({ y, busy: false, busyT: 0 }));
-    // enzymes — Pac-Man degraders rising up through the cleft from below
+    // enzymes — Pac-Man hunters that chase down free NTs in the cleft
     const enzymes = [
-      new Enzyme(810, ACT_BOT - 10, { rising: true }),
-      new Enzyme(840, ACT_BOT + 30, { rising: true }),
-      new Enzyme(820, ACT_BOT + 80, { rising: true }),
-      new Enzyme(860, ACT_BOT + 130, { rising: true })
+      new Enzyme(810, 250, { seeking: true }),
+      new Enzyme(850, 330, { seeking: true }),
+      new Enzyme(820, 410, { seeking: true })
     ];
     sceneLocal = { nts, vesicles, transporters, enzymes, time: 0 };
   },
