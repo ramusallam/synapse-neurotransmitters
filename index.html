@@ -1823,7 +1823,7 @@ const sceneBindFire = {
       ctx.fillText('Na⁺ becomes the new electrical signal →', POST_MEM_X + 220, 60);
     } else {
       ctx.fillStyle = '#ffd166';
-      ctx.fillText('new action potential travels →', POST_MEM_X + 220, 60);
+      ctx.fillText('signal continues down the next neuron →', POST_MEM_X + 220, 60);
     }
     ctx.restore();
   }
@@ -2073,7 +2073,7 @@ const sceneZoomOut = {
 //  SCENE 8: Interactive — add/remove NTs
 // =====================================================
 const sceneInteractive = {
-  phase: 'Step 8: Try It · More or Fewer NTs?',
+  phase: 'Step 7: Try It · More or Fewer NTs?',
   phaseColor: '#f472b6',
   isInteractive: true,
   notes: "<strong>Click + Add NTs to flood the cleft.</strong> Watch the next neuron fire faster. <strong>Click − Remove NTs to drain it.</strong> Watch firing slow down. <strong>More NTs = more bound receptors = faster firing.</strong> This is why NT levels matter so much for how your brain feels and behaves.",
@@ -2375,7 +2375,7 @@ function drawPlasticityPanel(ctx, x, y, w, h, accent, num, title, desc, drawAnim
 }
 
 const sceneNeuroplasticity = {
-  phase: 'Step 9: Neuroplasticity · The Brain Rewires Itself',
+  phase: 'Step 10: Neuroplasticity',
   phaseColor: '#a855f7',
   notes: "<strong>Neuroplasticity</strong> is the brain's ability to change by <strong>building, strengthening, weakening, or speeding up</strong> connections between neurons. None of this would be possible without synapses connecting many neurons together. <strong>This is the ultimate hope message.</strong> You can learn. You can change your thinking. You can grow. People recover from addiction. People rebuild after injury. Your reality is not fixed because your brain is not fixed.",
   notebook: "Copy all four kinds of neuroplasticity into your notes. Then write: <strong>my brain can change.</strong> Pick one habit, skill, or thought pattern you want to grow, and circle it as your neuroplasticity goal.",
@@ -2390,25 +2390,19 @@ const sceneNeuroplasticity = {
     ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, W, H);
 
-    // Header
+    // Header — title only
     ctx.save();
     ctx.fillStyle = 'rgba(245, 245, 245, 0.95)';
-    ctx.font = '900 28px -apple-system, system-ui';
+    ctx.font = '900 30px -apple-system, system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText('NEUROPLASTICITY', W / 2, 38);
-    ctx.font = '500 13px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(168, 85, 247, 0.9)';
-    ctx.fillText("the brain's 4 moves for changing itself", W / 2, 60);
-    ctx.font = '400 12px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(160, 160, 160, 0.75)';
-    ctx.fillText("none of this works without synapses connecting many neurons together", W / 2, 80);
+    ctx.fillText('NEUROPLASTICITY', W / 2, 44);
     ctx.restore();
 
     // 2×2 grid of panels
-    const pw = 750, ph = 222, gap = 22;
+    const pw = 750, ph = 240, gap = 22;
     const sx = (W - pw * 2 - gap) / 2;
-    const sy = 100;
+    const sy = 70;
 
     // Panel 1 — BUILD
     drawPlasticityPanel(ctx, sx, sy, pw, ph, '#22c55e', '01', 'BUILD',
@@ -2712,7 +2706,7 @@ function panelMyelinate(ctx, px, py, pw, ph, time) {
 //  SCENE 10: Common Neurotransmitters
 // =====================================================
 const sceneCommonNTs = {
-  phase: 'Step 10: Common Neurotransmitters',
+  phase: 'Step 8: Common Neurotransmitters',
   phaseColor: '#a855f7',
   notes: "Same machinery, different chemicals. The neurotransmitter you release decides what the signal <em>does</em>. <strong>Dopamine</strong> drives motivation and reward. <strong>Serotonin</strong> stabilizes mood. <strong>Endorphins</strong> dull pain and create a natural high. <strong>Glutamate</strong> is the brain's GO signal. <strong>GABA</strong> is the brain's STOP signal. <strong>Acetylcholine</strong> moves muscles and sharpens attention.",
   notebook: "List all six neurotransmitters and the main job of each. Star one you have heard about before. These are the ones we will keep coming back to.",
@@ -2836,7 +2830,7 @@ const sceneCommonNTs = {
 //  SCENE 11: SSRIs / Zoloft
 // =====================================================
 const sceneSSRI = {
-  phase: 'Step 11: Case Study · Medicine',
+  phase: 'Step 9: Case Study · Medicine',
   phaseColor: '#7dd3fc',
   notes: "<strong>Case study time.</strong> Now that you understand the synapse, let's look at one whole class of medicine: <strong>SSRIs · Selective Serotonin Reuptake Inhibitors</strong>. Common ones include <strong>Zoloft, Prozac, Paxil, Lexapro, and Celexa</strong>. They all do the same thing: target the <strong>serotonin transporters</strong> on the presynaptic membrane and <strong>block them</strong>. Important: <strong>they do NOT make MORE serotonin.</strong> They just stop the reuptake, so the serotonin you already release stays in the synapse <strong>longer</strong> and binds receptors longer. That is how SSRIs help with depression and anxiety.",
   notebook: "Write: <strong>SSRI = Selective Serotonin Reuptake Inhibitor.</strong> List at least three SSRI brand names from the screen. Then explain in one sentence: SSRIs do NOT make more serotonin — they just keep what you already have around longer.",
@@ -3041,11 +3035,10 @@ const scenes = [
   sceneRelease,        // 4
   sceneBindFire,       // 5
   sceneReuptake,       // 6
-  sceneZoomOut,        // 7
-  sceneInteractive,    // 8
-  sceneNeuroplasticity,// 9
-  sceneCommonNTs,      // 10
-  sceneSSRI            // 11
+  sceneInteractive,    // 7
+  sceneCommonNTs,      // 8
+  sceneSSRI,           // 9
+  sceneNeuroplasticity // 10
 ];
 
 // =====================================================
