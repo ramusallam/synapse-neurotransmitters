@@ -1156,6 +1156,174 @@ class SSRI {
   }
 }
 
+// Enzyme — Pac-Man-style; floats in cleft and degrades leftover NTs
+class Enzyme {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.vx = (Math.random() - 0.5) * 0.4;
+    this.vy = (Math.random() - 0.5) * 0.4;
+    this.r = 13;
+    this.mouthPhase = Math.random() * Math.PI * 2;
+    this.eatFlash = 0;
+    this.blocked = false;
+  }
+  update(dt, nts) {
+    this.mouthPhase += dt / 180;
+    if (this.eatFlash > 0) this.eatFlash = Math.max(0, this.eatFlash - dt / 280);
+    const cap = this.blocked ? 0.18 : 0.7;
+    this.vx += (Math.random() - 0.5) * (this.blocked ? 0.04 : 0.1);
+    this.vy += (Math.random() - 0.5) * (this.blocked ? 0.04 : 0.1);
+    this.vx *= 0.95; this.vy *= 0.95;
+    const sp = Math.hypot(this.vx, this.vy);
+    if (sp > cap) { this.vx = this.vx / sp * cap; this.vy = this.vy / sp * cap; }
+    this.x += this.vx; this.y += this.vy;
+    // confine within active zone of cleft
+    if (this.y < ACT_TOP + this.r) { this.y = ACT_TOP + this.r; this.vy = Math.abs(this.vy); }
+    if (this.y > ACT_BOT - this.r) { this.y = ACT_BOT - this.r; this.vy = -Math.abs(this.vy); }
+    if (this.x < PRE_MEM_X + this.r + 6) { this.x = PRE_MEM_X + this.r + 6; this.vx = Math.abs(this.vx); }
+    if (this.x > POST_MEM_X - this.r - 6) { this.x = POST_MEM_X - this.r - 6; this.vx = -Math.abs(this.vx); }
+
+    if (this.blocked || !nts) return;
+    // chomp a free NT in range
+    for (const n of nts) {
+      if (n.state === 'free' && Math.hypot(n.x - this.x, n.y - this.y) < this.r + n.r + 2) {
+        n.state = 'recycled';
+        this.eatFlash = 1;
+        return;
+      }
+    }
+  }
+  draw(ctx) {
+    const mouthOpen = 0.1 + (Math.sin(this.mouthPhase) + 1) * 0.30; // 0.1..0.7 rad
+    ctx.save();
+    if (this.eatFlash > 0) {
+      const gg = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r * 2.2);
+      gg.addColorStop(0, `rgba(252, 211, 77, ${this.eatFlash * 0.55})`);
+      gg.addColorStop(1, 'rgba(252, 211, 77, 0)');
+      ctx.fillStyle = gg;
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.r * 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+    // body — Pac-Man with mouth pointing right (toward NTs)
+    const bg = ctx.createRadialGradient(this.x - this.r * 0.4, this.y - this.r * 0.4, 0, this.x, this.y, this.r);
+    if (this.blocked) {
+      bg.addColorStop(0, 'rgba(190, 190, 195, 0.95)');
+      bg.addColorStop(0.6, 'rgba(120, 120, 130, 0.95)');
+      bg.addColorStop(1, 'rgba(70, 70, 78, 0.95)');
+    } else {
+      bg.addColorStop(0, '#fef3c7');
+      bg.addColorStop(0.5, '#facc15');
+      bg.addColorStop(1, '#a16207');
+    }
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.moveTo(this.x, this.y);
+    ctx.arc(this.x, this.y, this.r, mouthOpen, Math.PI * 2 - mouthOpen);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = this.blocked ? 'rgba(40, 40, 45, 0.7)' : 'rgba(120, 80, 0, 0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // eye
+    ctx.fillStyle = this.blocked ? 'rgba(20,20,25,0.85)' : 'rgba(50, 30, 0, 0.95)';
+    ctx.beginPath(); ctx.arc(this.x - 1, this.y - 5, 2.2, 0, Math.PI * 2); ctx.fill();
+    // blocked X
+    if (this.blocked) {
+      ctx.strokeStyle = 'rgba(255, 80, 80, 0.95)';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(this.x - 7, this.y - 7); ctx.lineTo(this.x + 7, this.y + 7);
+      ctx.moveTo(this.x + 7, this.y - 7); ctx.lineTo(this.x - 7, this.y + 7);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+// MAOI molecule — drug; binds to enzymes and disables them
+class MAOI {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.r = 10;
+    this.state = 'free';
+    this.pathT = 0; this.pathSpeed = 0;
+    this.pathStart = null; this.pathEnd = null;
+    this.targetEnzyme = null;
+    this.vx = (Math.random() - 0.5) * 0.3;
+    this.vy = (Math.random() - 0.5) * 0.3;
+  }
+  update(dt) {
+    if (this.state === 'transitTo') {
+      this.pathT += this.pathSpeed * dt;
+      if (this.pathT >= 1) {
+        this.pathT = 1;
+        this.x = this.pathEnd.x; this.y = this.pathEnd.y;
+        this.state = 'locked';
+        if (this.targetEnzyme) this.targetEnzyme.blocked = true;
+        return;
+      }
+      const tt = this.pathT;
+      const ease = tt * tt * (3 - 2 * tt);
+      // also follow the enzyme as it drifts
+      if (this.targetEnzyme) {
+        this.pathEnd.x = this.targetEnzyme.x;
+        this.pathEnd.y = this.targetEnzyme.y;
+      }
+      this.x = lerp(this.pathStart.x, this.pathEnd.x, ease);
+      this.y = lerp(this.pathStart.y, this.pathEnd.y, ease);
+      return;
+    }
+    if (this.state === 'locked') {
+      // ride along with the enzyme it's blocking
+      if (this.targetEnzyme) {
+        this.x = this.targetEnzyme.x;
+        this.y = this.targetEnzyme.y;
+      }
+      return;
+    }
+    this.vx += (Math.random() - 0.5) * 0.1;
+    this.vy += (Math.random() - 0.5) * 0.1;
+    this.vx *= 0.96; this.vy *= 0.96;
+    this.x += this.vx; this.y += this.vy;
+    if (this.y < 50) { this.y = 50; this.vy = Math.abs(this.vy); }
+    if (this.y > H - 50) { this.y = H - 50; this.vy = -Math.abs(this.vy); }
+  }
+  setTransit(enzyme, speed) {
+    this.state = 'transitTo';
+    this.pathStart = { x: this.x, y: this.y };
+    this.pathEnd = { x: enzyme.x, y: enzyme.y };
+    this.pathT = 0;
+    this.pathSpeed = speed;
+    this.targetEnzyme = enzyme;
+  }
+  draw(ctx) {
+    ctx.save();
+    const x = this.x, y = this.y, r = this.r;
+    // capsule (orange-red to distinguish from SSRI cyan)
+    const g = ctx.createLinearGradient(x - r, y, x + r, y);
+    g.addColorStop(0, '#fed7aa');
+    g.addColorStop(0.5, '#fb923c');
+    g.addColorStop(1, '#c2410c');
+    ctx.fillStyle = g;
+    roundRect(ctx, x - r * 1.6, y - r * 0.7, r * 3.2, r * 1.4, r * 0.7);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1; ctx.stroke();
+    // glow
+    const gg = ctx.createRadialGradient(x, y, 0, x, y, r * 2.5);
+    gg.addColorStop(0, 'rgba(251, 146, 60, 0.5)');
+    gg.addColorStop(1, 'rgba(251, 146, 60, 0)');
+    ctx.fillStyle = gg;
+    ctx.beginPath(); ctx.arc(x, y, r * 2.5, 0, Math.PI * 2); ctx.fill();
+    // label
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.font = '700 8px -apple-system, system-ui';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('MAOI', x, y + 0.5);
+    ctx.restore();
+  }
+}
+
 // =====================================================
 //  Label helper
 // =====================================================
@@ -1810,10 +1978,10 @@ const sceneReleaseBindFire = {
 //  SCENE 6: Reuptake
 // =====================================================
 const sceneReuptake = {
-  phase: 'Step 5: Reuptake',
+  phase: 'Step 5: Reuptake & Cleanup',
   phaseColor: '#5eead4',
-  notes: "Once the message is passed, the synapse needs to <strong>reset</strong>. <strong>Reuptake transporters</strong> on the presynaptic membrane <strong>vacuum the leftover neurotransmitters back into the terminal</strong>. The NTs are then <strong>repackaged into vesicles</strong> so they can be used again. Without reuptake, NTs would build up forever and never stop signaling.",
-  notebook: "Draw transporters <strong>vacuuming NTs back IN</strong> to the terminal, then watch each NT load INTO an empty vesicle. Label: <strong>REUPTAKE → REPACKAGED</strong>. The same NTs get used over and over.",
+  notes: "Once the message is passed, the synapse has to <strong>reset</strong>. The brain has two ways to do this. <strong>Reuptake transporters</strong> vacuum NTs back into the terminal so they can be repackaged into vesicles and used again. <strong>Enzymes</strong> in the synapse also help clean up by <strong>degrading leftover NTs</strong>, breaking them down so they no longer signal. Without reuptake AND enzymes, NTs would build up forever and never stop firing.",
+  notebook: "Draw both cleanup tools: <strong>transporters</strong> pulling NTs back in to be repackaged, AND <strong>enzymes</strong> (Pac-Man) chomping leftover NTs. Label: <strong>REUPTAKE</strong> and <strong>DEGRADATION</strong>. Two ways to reset the synapse.",
   setup() {
     clearField();
     const nts = [];
@@ -1836,10 +2004,18 @@ const sceneReuptake = {
       assigned: 0    // count of NTs heading to this vesicle
     }));
     const transporters = TRANS_YS.map(y => ({ y, busy: false, busyT: 0 }));
-    sceneLocal = { nts, vesicles, transporters, time: 0 };
+    // enzymes — Pac-Man degraders drifting in the cleft
+    const enzymes = [
+      new Enzyme(770, 250),
+      new Enzyme(820, 330),
+      new Enzyme(780, 410)
+    ];
+    sceneLocal = { nts, vesicles, transporters, enzymes, time: 0 };
   },
   update(dt) {
     sceneLocal.time += dt;
+    // enzymes drift and chomp free NTs
+    sceneLocal.enzymes.forEach(e => e.update(dt, sceneLocal.nts));
 
     // keep the cleft populated so demo loops continuously
     const cleftCount = sceneLocal.nts.filter(n => n.state === 'free').length;
@@ -1953,6 +2129,8 @@ const sceneReuptake = {
     RECEPTOR_YS.forEach(y => drawReceptor(ctx, y, 0));
     CA_CHANNEL_YS.forEach(y => drawCalciumChannel(ctx, y, 0));
     sceneLocal.transporters.forEach(tr => drawTransporter(ctx, tr.y, 1, t));
+    // ENZYMES — Pac-Man degraders chomping leftover NTs
+    sceneLocal.enzymes.forEach(e => e.draw(ctx));
 
     // big inward arrows next to each transporter for clarity
     ctx.save();
@@ -1975,14 +2153,17 @@ const sceneReuptake = {
     });
     ctx.restore();
 
+    // header — two cleanup paths
     ctx.save();
-    ctx.fillStyle = C_TRANS;
-    ctx.font = '900 22px -apple-system, system-ui';
+    ctx.font = '900 18px -apple-system, system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('REUPTAKE → REPACKAGED', PRE_MEM_X + 5, 60);
-    ctx.font = '500 13px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(94, 234, 212, 0.85)';
-    ctx.fillText('transporters vacuum NTs back IN, then load them into vesicles to use again', PRE_MEM_X + 5, 82);
+    ctx.fillStyle = C_TRANS;
+    ctx.fillText('REUPTAKE', 480, 50);
+    ctx.fillStyle = '#facc15';
+    ctx.fillText('+  DEGRADATION', 700, 50);
+    ctx.font = '500 12px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(220, 220, 230, 0.78)';
+    ctx.fillText('transporters pull NTs back into vesicles  ·  enzymes chomp the leftovers', 600, 75);
     ctx.restore();
   }
 };
@@ -2804,201 +2985,315 @@ const sceneCommonNTs = {
 };
 
 // =====================================================
-//  SCENE 11: SSRIs / Zoloft
+//  SCENE 8: Case Study · SSRIs vs MAO Inhibitors (split-screen)
 // =====================================================
-const sceneSSRI = {
-  phase: 'Step 8: Case Study · Medicine',
-  phaseColor: '#7dd3fc',
-  notes: "<strong>SSRIs</strong> are medications used to treat <strong>depression and anxiety</strong> by altering <strong>serotonin levels</strong> in the synapse. Common ones include <strong>Zoloft, Prozac, Paxil, Lexapro, and Celexa</strong>. They all work the same way. <strong>SSRIs do NOT make more serotonin.</strong> They keep the serotonin you already have around longer by <strong>blocking the transporter</strong> on the presynaptic neuron, which stops reuptake. The serotonin lingers in the synapse, binds receptors longer, and the mood signal lasts longer.",
-  notebook: "Write: <strong>SSRI = Selective Serotonin Reuptake Inhibitor.</strong> List at least three SSRI brand names. Then explain: SSRIs treat depression and anxiety by blocking the transporter, which keeps serotonin in the synapse longer.",
-  setup() {
-    clearField();
-    const nts = [];
-    for (let i = 0; i < 22; i++) {
-      const y = ACT_TOP + 14 + Math.random() * (ACT_BOT - ACT_TOP - 28);
-      const x = PRE_MEM_X + 20 + Math.random() * (POST_MEM_X - PRE_MEM_X - 40);
-      nts.push(new NT(x, y));
-    }
-    const receptors = RECEPTOR_YS.map(y => ({ y, bound: 0, target: 0, slot: null }));
-    const transporters = TRANS_YS.map(y => ({ y, blocked: false }));
-    const ssris = [];
-    // a couple SSRI molecules drift in from above
-    for (let i = 0; i < 2; i++) {
-      ssris.push(new SSRI(900 + i * 200, -30 - i * 60));
-    }
-    sceneLocal = {
-      nts, receptors, transporters, ssris,
-      naIons: [], apTrains: [], apTimer: 0, sparkles: [],
-      time: 0, blockingStarted: false
-    };
-  },
-  update(dt) {
-    sceneLocal.time += dt;
 
-    // SSRI molecules drift in then dock to transporters after a short delay
-    if (!sceneLocal.blockingStarted && sceneLocal.time > 800) {
-      sceneLocal.blockingStarted = true;
-      sceneLocal.ssris.forEach((s, i) => {
-        const tr = sceneLocal.transporters[i];
-        if (tr) {
-          s.setTransit({ x: PRE_MEM_X + 14, y: tr.y }, 1.0 / 1000, tr);
-        }
+// helpers — set up, update, draw a single half (SSRI or MAOI)
+function setupCaseSide(side, isMaoi) {
+  side.nts = [];
+  for (let i = 0; i < 18; i++) {
+    const y = ACT_TOP + 14 + Math.random() * (ACT_BOT - ACT_TOP - 28);
+    const x = PRE_MEM_X + 20 + Math.random() * (POST_MEM_X - PRE_MEM_X - 40);
+    side.nts.push(new NT(x, y));
+  }
+  side.receptors = RECEPTOR_YS.map(y => ({ y, bound: 0, target: 0, slot: null }));
+  side.transporters = TRANS_YS.map(y => ({ y, busy: false, busyT: 0, blocked: false }));
+  side.enzymes = [
+    new Enzyme(770, 250),
+    new Enzyme(820, 330),
+    new Enzyme(780, 410)
+  ];
+  side.naIons = [];
+  side.apTrains = [];
+  side.apTimer = 0;
+  side.sparkles = [];
+  side.blockingStarted = false;
+  if (isMaoi) {
+    side.maois = [
+      new MAOI(900, -250),
+      new MAOI(1100, -350),
+      new MAOI(1300, -280)
+    ];
+    side.ssris = [];
+  } else {
+    side.ssris = [
+      new SSRI(900, -250),
+      new SSRI(1100, -340)
+    ];
+    side.maois = [];
+  }
+}
+
+function updateCaseSide(side, dt, isMaoi, time) {
+  // start blocking after a beat
+  if (!side.blockingStarted && time > 1000) {
+    side.blockingStarted = true;
+    if (isMaoi) {
+      side.maois.forEach((m, i) => {
+        if (side.enzymes[i]) m.setTransit(side.enzymes[i], 0.9 / 1000);
+      });
+    } else {
+      side.ssris.forEach((s, i) => {
+        const tr = side.transporters[i];
+        if (tr) s.setTransit({ x: PRE_MEM_X + 14, y: tr.y }, 0.9 / 1000, tr);
       });
     }
-    sceneLocal.ssris.forEach(s => s.update(dt));
+  }
+  side.maois.forEach(m => m.update(dt));
+  side.ssris.forEach(s => s.update(dt));
 
-    // receptors bind NTs (same as interactive)
-    sceneLocal.receptors.forEach(r => {
-      if (r.slot == null && r.target < 0.5) {
-        const candidate = sceneLocal.nts.find(n => n.state === 'free');
-        if (candidate && Math.random() < 0.18) {
-          const dest = { x: POST_MEM_X - 10, y: r.y };
-          candidate.setTransit(dest, 1.5 / 1000, 'receptor', r);
-          r.slot = candidate;
-          r.target = 1;
-        }
+  // receptors bind NTs
+  const allBlocked = isMaoi
+    ? side.enzymes.every(e => e.blocked)
+    : side.transporters.every(tr => tr.blocked);
+  const bondDuration = allBlocked ? 2400 : 1300;
+  side.receptors.forEach(r => {
+    if (r.slot == null && r.target < 0.5) {
+      const candidate = side.nts.find(n => n.state === 'free');
+      if (candidate && Math.random() < 0.18) {
+        candidate.setTransit({ x: POST_MEM_X - 10, y: r.y }, 1.5 / 1000, 'receptor', r);
+        r.slot = candidate;
+        r.target = 1;
       }
-      r.bound = lerp(r.bound, r.target, 0.06);
-      // SSRI keeps NTs bound longer
-      const longBond = sceneLocal.transporters.every(tr => tr.blocked) ? 2400 : 1300;
-      if (r.slot && r.slot.state === 'bound' && r.slot.bondT > longBond) {
-        r.slot.state = 'free';
-        r.slot.vx = (Math.random() - 0.5) * 0.8;
-        r.slot.vy = (Math.random() - 0.5) * 0.8;
-        r.slot.x = POST_MEM_X - 25;
-        r.slot.y = r.y + (Math.random() - 0.5) * 14;
-        r.slot = null; r.target = 0; r.bound = 0;
-      }
-      if (r.bound > 0.6 && Math.random() < 0.07 * r.bound) {
-        sceneLocal.naIons.push({
-          x: POST_MEM_X + 22, y: r.y + (Math.random() - 0.5) * 26,
-          vx: 0.6 + Math.random() * 0.7, vy: (Math.random() - 0.5) * 0.4, life: 1
-        });
-      }
-    });
-
-    // NO REUPTAKE (transporters blocked)
-
-    sceneLocal.nts.forEach(n => n.update(dt));
-    sceneLocal.naIons.forEach(n => { n.x += n.vx; n.y += n.vy; n.life -= 0.005; });
-    sceneLocal.naIons = sceneLocal.naIons.filter(n => n.life > 0 && n.x < W);
-
-    // post AP trains (more frequent because more bound)
-    const boundCount = sceneLocal.receptors.filter(r => r.bound > 0.5).length;
-    const interval = sceneLocal.transporters.every(tr => tr.blocked) ? 700 : 1500;
-    sceneLocal.apTimer += dt;
-    if (boundCount >= 2 && sceneLocal.apTimer > interval) {
-      sceneLocal.apTimer = 0;
-      sceneLocal.apTrains.push({ progress: 0 });
     }
-    sceneLocal.apTrains.forEach(ap => { ap.progress += 0.0014 * dt; });
-    sceneLocal.apTrains = sceneLocal.apTrains.filter(ap => ap.progress < 1.05);
-    sceneLocal.apTrains.forEach(ap => {
-      if (ap.progress < 1 && Math.random() < 0.4) {
-        const x = lerp(POST_MEM_X + 60, W - 30, ap.progress);
-        sceneLocal.sparkles.push({ x, y: MID + (Math.random() - 0.5) * 12, vx: (Math.random() - 0.5), vy: (Math.random() - 0.5), life: 1 });
+    r.bound = lerp(r.bound, r.target, 0.06);
+    if (r.slot && r.slot.state === 'bound' && r.slot.bondT > bondDuration) {
+      r.slot.state = 'free';
+      r.slot.vx = (Math.random() - 0.5) * 0.8;
+      r.slot.vy = (Math.random() - 0.5) * 0.8;
+      r.slot.x = POST_MEM_X - 25;
+      r.slot.y = r.y + (Math.random() - 0.5) * 14;
+      r.slot = null; r.target = 0; r.bound = 0;
+    }
+    if (r.bound > 0.6 && Math.random() < 0.07 * r.bound) {
+      side.naIons.push({
+        x: POST_MEM_X + 22, y: r.y + (Math.random() - 0.5) * 26,
+        vx: 0.6 + Math.random() * 0.7, vy: (Math.random() - 0.5) * 0.4, life: 1
+      });
+    }
+  });
+
+  // MAOI side: transporters work normally (reuptake)
+  if (isMaoi) {
+    side.transporters.forEach(tr => {
+      if (!tr.busy) {
+        let nearest = null, ndist = 9999;
+        side.nts.forEach(n => {
+          if (n.state === 'free' && Math.abs(n.y - tr.y) < 90) {
+            const d = Math.abs(n.x - PRE_MEM_X) + Math.abs(n.y - tr.y) * 0.5;
+            if (d < ndist) { ndist = d; nearest = n; }
+          }
+        });
+        if (nearest) {
+          nearest.setTransit({ x: PRE_MEM_X - 60, y: tr.y + (Math.random() - 0.5) * 30 }, 1.6 / 1000, 'reuptake');
+          tr.busy = true; tr.busyT = 0;
+        }
+      } else {
+        tr.busyT += dt;
+        if (tr.busyT > 600) tr.busy = false;
       }
     });
-    sceneLocal.sparkles.forEach(s => { s.x += s.vx; s.y += s.vy; s.life -= 0.04; });
-    sceneLocal.sparkles = sceneLocal.sparkles.filter(s => s.life > 0);
-  },
-  draw(ctx, t) {
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0, 0, W, H);
-    drawPresynapticTerminal(ctx);
-    drawPostsynapticDendrite(ctx);
-    sceneLocal.nts.forEach(n => n.draw(ctx));
-    sceneLocal.receptors.forEach(r => drawReceptor(ctx, r.y, r.bound));
-    CA_CHANNEL_YS.forEach(y => drawCalciumChannel(ctx, y, 0.3));
-    // transporters drawn inactive when blocked
-    sceneLocal.transporters.forEach(tr => drawTransporter(ctx, tr.y, tr.blocked ? 0 : 0.5, t));
+  }
 
-    // SSRI molecules
-    sceneLocal.ssris.forEach(s => s.draw(ctx));
+  // enzymes: SSRI side they chomp; MAOI side they're blocked
+  side.enzymes.forEach(e => e.update(dt, isMaoi ? null : side.nts));
 
-    // BLOCKED indicator on each blocked transporter
-    sceneLocal.transporters.forEach(tr => {
+  // gentle replenish
+  if (side.nts.filter(n => n.state === 'free').length < 12 && Math.random() < 0.05) {
+    const y = ACT_TOP + 14 + Math.random() * (ACT_BOT - ACT_TOP - 28);
+    side.nts.push(new NT(PRE_MEM_X + 30, y));
+  }
+
+  side.nts.forEach(n => n.update(dt));
+  side.nts = side.nts.filter(n => n.state !== 'recycled');
+  side.naIons.forEach(n => { n.x += n.vx; n.y += n.vy; n.life -= 0.005; });
+  side.naIons = side.naIons.filter(n => n.life > 0 && n.x < W);
+
+  // AP trains (more frequent when cleanup blocked)
+  const boundCount = side.receptors.filter(r => r.bound > 0.5).length;
+  const interval = allBlocked ? 800 : 1500;
+  side.apTimer += dt;
+  if (boundCount >= 2 && side.apTimer > interval) {
+    side.apTimer = 0;
+    side.apTrains.push({ progress: 0 });
+  }
+  side.apTrains.forEach(ap => { ap.progress += 0.0014 * dt; });
+  side.apTrains = side.apTrains.filter(ap => ap.progress < 1.05);
+  side.apTrains.forEach(ap => {
+    if (ap.progress < 1 && Math.random() < 0.4) {
+      const x = lerp(POST_MEM_X + 60, W - 30, ap.progress);
+      side.sparkles.push({
+        x, y: MID + (Math.random() - 0.5) * 12,
+        vx: (Math.random() - 0.5), vy: (Math.random() - 0.5), life: 1
+      });
+    }
+  });
+  side.sparkles.forEach(s => { s.x += s.vx; s.y += s.vy; s.life -= 0.04; });
+  side.sparkles = side.sparkles.filter(s => s.life > 0);
+}
+
+function drawCaseSide(ctx, side, t, isMaoi) {
+  drawPresynapticTerminal(ctx);
+  drawPostsynapticDendrite(ctx);
+  side.nts.forEach(n => n.draw(ctx));
+  side.receptors.forEach(r => drawReceptor(ctx, r.y, r.bound));
+  CA_CHANNEL_YS.forEach(y => drawCalciumChannel(ctx, y, 0.3));
+  side.transporters.forEach(tr => drawTransporter(ctx, tr.y, tr.blocked ? 0 : 0.6, t));
+  side.enzymes.forEach(e => e.draw(ctx));
+  side.maois.forEach(m => m.draw(ctx));
+  side.ssris.forEach(s => s.draw(ctx));
+
+  // SSRI side: red X over blocked transporters
+  if (!isMaoi) {
+    side.transporters.forEach(tr => {
       if (tr.blocked) {
-        ctx.save();
-        // red X over the transporter mouth
         const x = PRE_MEM_X + 12;
-        ctx.strokeStyle = 'rgba(255, 80, 80, 0.85)';
-        ctx.lineWidth = 3;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 80, 80, 0.95)';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(x - 12, tr.y - 12); ctx.lineTo(x + 12, tr.y + 12);
         ctx.moveTo(x + 12, tr.y - 12); ctx.lineTo(x - 12, tr.y + 12);
         ctx.stroke();
-        // BLOCKED label
-        ctx.fillStyle = '#ff5050';
-        ctx.font = '700 11px -apple-system, system-ui';
-        ctx.textAlign = 'center';
-        ctx.fillText('BLOCKED', x, tr.y - 30);
         ctx.restore();
       }
     });
+  }
 
-    // Na ions
-    sceneLocal.naIons.forEach(n => {
-      ctx.save();
-      ctx.globalAlpha = n.life;
-      const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 16);
-      g.addColorStop(0, 'rgba(255, 122, 107, 0.5)');
-      g.addColorStop(1, 'rgba(255, 122, 107, 0)');
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(n.x, n.y, 16, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = C_NA;
-      ctx.beginPath(); ctx.arc(n.x, n.y, 6, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.95)';
-      ctx.font = '700 9px -apple-system, system-ui';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('Na⁺', n.x, n.y);
-      ctx.restore();
-    });
-
-    // AP bolts on post side
-    sceneLocal.apTrains.forEach(ap => {
-      drawLightningBolt(ctx, POST_MEM_X + 60, W - 30, MID, ap.progress, []);
-    });
-    sceneLocal.sparkles.forEach(s => {
-      ctx.save();
-      ctx.globalAlpha = s.life * 0.7;
-      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 16);
-      g.addColorStop(0, 'rgba(255,255,220,0.9)');
-      g.addColorStop(1, 'rgba(255,209,102,0)');
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(s.x, s.y, 16, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-    });
-
-    // Case Study header
+  // Na ions (postsynaptic)
+  side.naIons.forEach(n => {
     ctx.save();
-    // small "case study" tag
+    ctx.globalAlpha = n.life;
+    const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 16);
+    g.addColorStop(0, 'rgba(255, 122, 107, 0.5)');
+    g.addColorStop(1, 'rgba(255, 122, 107, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(n.x, n.y, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = C_NA;
+    ctx.beginPath(); ctx.arc(n.x, n.y, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.font = '700 9px -apple-system, system-ui';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Na⁺', n.x, n.y);
+    ctx.restore();
+  });
+
+  // AP bolts traveling on postsynaptic side
+  side.apTrains.forEach(ap => {
+    drawLightningBolt(ctx, POST_MEM_X + 60, W - 30, MID, ap.progress, []);
+  });
+  side.sparkles.forEach(s => {
+    ctx.save();
+    ctx.globalAlpha = s.life * 0.7;
+    const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 16);
+    g.addColorStop(0, 'rgba(255,255,220,0.9)');
+    g.addColorStop(1, 'rgba(255,209,102,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(s.x, s.y, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+const sceneSSRI = {
+  phase: 'Step 8: Case Study · SSRIs vs MAO Inhibitors',
+  phaseColor: '#7dd3fc',
+  notes: "Both <strong>SSRIs</strong> and <strong>MAO Inhibitors</strong> are medications used to treat <strong>depression and anxiety</strong> by raising <strong>serotonin levels</strong> in the synapse. They work in completely different ways. <strong>SSRIs</strong> block the <strong>reuptake transporter</strong> on the presynaptic neuron, so serotonin stays in the synapse longer. <strong>MAO Inhibitors</strong> block <strong>MAO</strong>, the enzyme that breaks down leftover neurotransmitters, so they aren't degraded. Both end up with more serotonin available to fire signals. SSRIs are first-line because MAO Inhibitors have serious diet and drug interactions.",
+  notebook: "Compare both drug classes. For each, list 2–3 brand names, name <strong>WHERE in the synapse</strong> it works, and <strong>WHAT it blocks</strong>. Then write one reason MAO Inhibitors are rarely used today.",
+  setup() {
+    clearField();
+    sceneLocal = { ssri: {}, maoi: {}, time: 0 };
+    setupCaseSide(sceneLocal.ssri, false);
+    setupCaseSide(sceneLocal.maoi, true);
+  },
+  update(dt) {
+    sceneLocal.time += dt;
+    updateCaseSide(sceneLocal.ssri, dt, false, sceneLocal.time);
+    updateCaseSide(sceneLocal.maoi, dt, true, sceneLocal.time);
+  },
+  draw(ctx, t) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+
+    // Header banner
+    ctx.save();
     ctx.font = '700 11px -apple-system, system-ui';
     ctx.fillStyle = 'rgba(125, 211, 252, 0.7)';
     ctx.textAlign = 'center';
-    ctx.fillText('CASE STUDY · MEDICINE', CLEFT_MID, 28);
-    // main title
-    ctx.fillStyle = C_SSRI;
-    ctx.font = '900 26px -apple-system, system-ui';
-    ctx.fillText('SSRI', CLEFT_MID, 56);
+    ctx.fillText('CASE STUDY · TREATING DEPRESSION & ANXIETY', W / 2, 24);
     ctx.font = '500 12px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(125, 211, 252, 0.85)';
-    ctx.fillText('Selective Serotonin Reuptake Inhibitor', CLEFT_MID, 76);
-    // brand names row
-    ctx.font = '600 13px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(245, 245, 245, 0.85)';
-    ctx.fillText('Zoloft  ·  Prozac  ·  Paxil  ·  Lexapro  ·  Celexa', CLEFT_MID, 100);
+    ctx.fillStyle = 'rgba(220, 220, 230, 0.7)';
+    ctx.fillText('two drug classes, two different mechanisms, both raise serotonin', W / 2, 44);
     ctx.restore();
 
-    // Footer note
-    if (sceneLocal.blockingStarted) {
-      ctx.save();
-      ctx.fillStyle = 'rgba(125, 211, 252, 0.95)';
-      ctx.font = '700 16px -apple-system, system-ui';
-      ctx.textAlign = 'center';
-      ctx.fillText('reuptake blocked → serotonin stays in synapse longer → mood signal lasts longer', CLEFT_MID, H - 30);
-      ctx.restore();
-    }
+    // Vertical divider
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    ctx.moveTo(W / 2, 70); ctx.lineTo(W / 2, H - 90);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // ── LEFT: SSRI ──
+    ctx.save();
+    ctx.fillStyle = C_SSRI;
+    ctx.font = '900 22px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SSRI', W / 4, 80);
+    ctx.font = '500 12px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(125, 211, 252, 0.85)';
+    ctx.fillText('blocks the REUPTAKE TRANSPORTER', W / 4, 100);
+    ctx.font = '600 12px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(245, 245, 245, 0.82)';
+    ctx.fillText('Zoloft · Prozac · Paxil · Lexapro · Celexa', W / 4, 120);
+    ctx.restore();
+    // animation, scaled and translated to left half
+    ctx.save();
+    ctx.translate(0, 145);
+    ctx.scale(0.5, 0.5);
+    drawCaseSide(ctx, sceneLocal.ssri, t, false);
+    ctx.restore();
+
+    // ── RIGHT: MAOI ──
+    ctx.save();
+    ctx.fillStyle = '#fb923c';
+    ctx.font = '900 22px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('MAO INHIBITOR', W * 3 / 4, 80);
+    ctx.font = '500 12px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(251, 146, 60, 0.85)';
+    ctx.fillText('blocks the DEGRADING ENZYME (MAO)', W * 3 / 4, 100);
+    ctx.font = '600 12px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(245, 245, 245, 0.82)';
+    ctx.fillText('Nardil · Marplan · Parnate · Emsam', W * 3 / 4, 120);
+    ctx.restore();
+    // animation
+    ctx.save();
+    ctx.translate(W / 2, 145);
+    ctx.scale(0.5, 0.5);
+    drawCaseSide(ctx, sceneLocal.maoi, t, true);
+    ctx.restore();
+
+    // Footer takeaway lines
+    ctx.save();
+    ctx.font = '700 13px -apple-system, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(125, 211, 252, 0.95)';
+    ctx.fillText('reuptake blocked → serotonin stays OUTSIDE in the synapse longer', W / 4, H - 60);
+    ctx.fillStyle = 'rgba(251, 146, 60, 0.95)';
+    ctx.fillText('enzyme blocked → serotonin not destroyed → more available', W * 3 / 4, H - 60);
+    // MAOI caveat
+    ctx.font = '500 11px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(255, 80, 80, 0.85)';
+    ctx.fillText('MAO Inhibitors are rarely first-line: dangerous interactions with aged cheese, wine, & many drugs', W * 3 / 4, H - 38);
+    // Bottom unifying line
+    ctx.font = '700 14px -apple-system, system-ui';
+    ctx.fillStyle = 'rgba(245, 245, 245, 0.85)';
+    ctx.fillText('both → more serotonin signaling → relief from depression & anxiety', W / 2, H - 14);
+    ctx.restore();
   }
 };
 
