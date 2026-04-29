@@ -1158,18 +1158,51 @@ class SSRI {
 
 // Enzyme — Pac-Man-style; floats in cleft and degrades leftover NTs
 class Enzyme {
-  constructor(x, y) {
+  constructor(x, y, opts = {}) {
     this.x = x; this.y = y;
-    this.vx = (Math.random() - 0.5) * 0.4;
-    this.vy = (Math.random() - 0.5) * 0.4;
+    this.vx = (Math.random() - 0.5) * 0.3;
+    this.vy = opts.rising ? -0.2 : (Math.random() - 0.5) * 0.4;
     this.r = 13;
     this.mouthPhase = Math.random() * Math.PI * 2;
     this.eatFlash = 0;
     this.blocked = false;
+    this.rising = opts.rising || false;
   }
   update(dt, nts) {
     this.mouthPhase += dt / 180;
     if (this.eatFlash > 0) this.eatFlash = Math.max(0, this.eatFlash - dt / 280);
+
+    if (this.rising && !this.blocked) {
+      // steady upward drift with gentle horizontal sway, on the right side of the cleft
+      this.vx += (Math.random() - 0.5) * 0.06;
+      this.vy -= 0.012; // continuous upward acceleration
+      this.vx *= 0.92; this.vy *= 0.94;
+      this.vx = clamp(this.vx, -0.35, 0.35);
+      this.vy = clamp(this.vy, -0.45, -0.05); // always rising
+      this.x += this.vx; this.y += this.vy;
+      // confine to right portion of cleft so transporters stay clear
+      const minX = PRE_MEM_X + 65;
+      const maxX = POST_MEM_X - this.r - 6;
+      if (this.x < minX) { this.x = minX; this.vx = 0.1; }
+      if (this.x > maxX) { this.x = maxX; this.vx = -0.1; }
+      // recycle when above top
+      if (this.y < ACT_TOP - 6) {
+        this.y = ACT_BOT + 4;
+        this.vy = -0.2;
+        this.x = minX + Math.random() * (maxX - minX);
+      }
+      if (!nts) return;
+      for (const n of nts) {
+        if (n.state === 'free' && Math.hypot(n.x - this.x, n.y - this.y) < this.r + n.r + 2) {
+          n.state = 'recycled';
+          this.eatFlash = 1;
+          return;
+        }
+      }
+      return;
+    }
+
+    // brownian (default) mode
     const cap = this.blocked ? 0.18 : 0.7;
     this.vx += (Math.random() - 0.5) * (this.blocked ? 0.04 : 0.1);
     this.vy += (Math.random() - 0.5) * (this.blocked ? 0.04 : 0.1);
@@ -1184,7 +1217,6 @@ class Enzyme {
     if (this.x > POST_MEM_X - this.r - 6) { this.x = POST_MEM_X - this.r - 6; this.vx = -Math.abs(this.vx); }
 
     if (this.blocked || !nts) return;
-    // chomp a free NT in range
     for (const n of nts) {
       if (n.state === 'free' && Math.hypot(n.x - this.x, n.y - this.y) < this.r + n.r + 2) {
         n.state = 'recycled';
@@ -1772,11 +1804,11 @@ function initReleaseBindFireCycle(state) {
   const positions = [
     { x: 380, y: 250, dockY: 240, willDock: false },
     { x: 460, y: 220, dockY: 240, willDock: true, delay: 0 },
-    { x: 540, y: 270, dockY: 285, willDock: true, delay: 180 },
-    { x: 410, y: 320, dockY: 325, willDock: true, delay: 360 },
-    { x: 500, y: 350, dockY: 365, willDock: true, delay: 540 },
+    { x: 540, y: 270, dockY: 285, willDock: true, delay: 100 },
+    { x: 410, y: 320, dockY: 325, willDock: true, delay: 200 },
+    { x: 500, y: 350, dockY: 365, willDock: true, delay: 300 },
     { x: 600, y: 310, dockY: 285, willDock: false },
-    { x: 380, y: 400, dockY: 410, willDock: true, delay: 720 },
+    { x: 380, y: 400, dockY: 410, willDock: true, delay: 400 },
     { x: 470, y: 420, dockY: 410, willDock: false },
     { x: 560, y: 390, dockY: 365, willDock: false },
     { x: 640, y: 270, dockY: 240, willDock: false },
@@ -1820,7 +1852,7 @@ const sceneReleaseBindFire = {
   },
   update(dt) {
     sceneLocal.cycleT += dt;
-    const cycle = 7000;
+    const cycle = 8500;
     const phase = (sceneLocal.cycleT % cycle) / cycle;
 
     // cycle reset
@@ -1828,11 +1860,11 @@ const sceneReleaseBindFire = {
       initReleaseBindFireCycle(sceneLocal);
     }
 
-    // RELEASE PHASE — vesicles dock and dump NTs (phase 0 → ~0.18)
+    // RELEASE PHASE — vesicles dock and dump NTs (phase 0 → ~0.13)
     sceneLocal.calciums.forEach(c => c.update(dt));
     sceneLocal.vesicles.forEach((v, i) => {
       const elapsed = phase * cycle;
-      if (v.willDock && v.state === 'rest' && elapsed > v.delay + 100) {
+      if (v.willDock && v.state === 'rest' && elapsed > v.delay + 80) {
         v.startDock({ x: PRE_MEM_X - 12, y: v.dockY });
       }
       v.update(dt);
@@ -1840,52 +1872,55 @@ const sceneReleaseBindFire = {
         sceneLocal.released.add(i);
         for (let k = 0; k < 5; k++) {
           const nt = new NT(v.x + 14, v.y + (Math.random() - 0.5) * 16);
-          nt.vx = 0.6 + Math.random() * 0.6;
-          nt.vy = (Math.random() - 0.5) * 0.8;
+          // slow, gentle rightward drift so the group floats across visibly
+          nt.vx = 0.25 + Math.random() * 0.18;
+          nt.vy = (Math.random() - 0.5) * 0.5;
           sceneLocal.nts.push(nt);
         }
       }
     });
 
-    // BIND PHASE — receptors lock NTs as they arrive (continuous after release starts)
-    sceneLocal.receptors.forEach(r => {
-      if (r.slot == null && r.target < 0.5) {
-        const candidate = sceneLocal.nts.find(n => n.state === 'free');
-        if (candidate && Math.random() < 0.18) {
-          const dest = { x: POST_MEM_X - 10, y: r.y };
-          candidate.setTransit(dest, 1.5 / 1000, 'receptor', r);
-          r.slot = candidate;
-          r.target = 1;
+    // BIND PHASE — receptors only start grabbing NTs after the float phase
+    if (phase > 0.45) {
+      sceneLocal.receptors.forEach(r => {
+        if (r.slot == null && r.target < 0.5) {
+          const candidate = sceneLocal.nts.find(n => n.state === 'free');
+          if (candidate && Math.random() < 0.10) {
+            const dest = { x: POST_MEM_X - 10, y: r.y };
+            candidate.setTransit(dest, 1.4 / 1000, 'receptor', r);
+            r.slot = candidate;
+            r.target = 1;
+          }
         }
-      }
-      r.bound = lerp(r.bound, r.target, 0.06);
-      if (r.bound > 0.6 && Math.random() < 0.08 * r.bound) {
-        sceneLocal.naIons.push({
-          x: POST_MEM_X + 22,
-          y: r.y + (Math.random() - 0.5) * 26,
-          vx: 0.6 + Math.random() * 0.7,
-          vy: (Math.random() - 0.5) * 0.4,
-          life: 1
-        });
-      }
-    });
+        r.bound = lerp(r.bound, r.target, 0.06);
+        if (r.bound > 0.6 && Math.random() < 0.08 * r.bound) {
+          sceneLocal.naIons.push({
+            x: POST_MEM_X + 22,
+            y: r.y + (Math.random() - 0.5) * 26,
+            vx: 0.6 + Math.random() * 0.7,
+            vy: (Math.random() - 0.5) * 0.4,
+            life: 1
+          });
+        }
+      });
+    }
     sceneLocal.nts.forEach(n => n.update(dt));
     sceneLocal.naIons.forEach(n => { n.x += n.vx; n.y += n.vy; n.life -= 0.005; });
     sceneLocal.naIons = sceneLocal.naIons.filter(n => n.life > 0 && n.x < W);
 
-    // FIRE PHASE — ignition flash + bolt travels (phase 0.55 → 1.0)
-    if (phase < 0.55) {
+    // FIRE PHASE — ignition flash + bolt travels (phase 0.62 → 1.0)
+    if (phase < 0.62) {
       sceneLocal.boltT = 0;
       sceneLocal.ignition = 0;
-    } else if (phase < 0.62) {
-      const f = (phase - 0.55) / 0.07;
+    } else if (phase < 0.70) {
+      const f = (phase - 0.62) / 0.08;
       sceneLocal.boltT = 0;
       sceneLocal.ignition = 1 - f;
     } else {
-      sceneLocal.boltT = clamp((phase - 0.62) / 0.32, 0, 1);
+      sceneLocal.boltT = clamp((phase - 0.70) / 0.28, 0, 1);
       sceneLocal.ignition = Math.max(0, sceneLocal.ignition - dt / 250);
     }
-    if (phase >= 0.55 && sceneLocal.lastPhase < 0.55) {
+    if (phase >= 0.62 && sceneLocal.lastPhase < 0.62) {
       sceneLocal.ignition = 1;
     }
     sceneLocal.lastPhase = phase;
@@ -1952,18 +1987,21 @@ const sceneReleaseBindFire = {
     // new action potential bolt traveling on postsynaptic side
     drawLightningBolt(ctx, POST_MEM_X + 60, W - 30, MID, sceneLocal.boltT, sceneLocal.sparkles);
 
-    // staged header text — narrates the chain in three beats
+    // staged header text — narrates the chain in four beats
     ctx.save();
     ctx.font = '700 16px -apple-system, system-ui';
     ctx.textAlign = 'center';
-    const phase = (sceneLocal.cycleT % 7000) / 7000;
-    if (phase < 0.20) {
+    const phase = (sceneLocal.cycleT % 8500) / 8500;
+    if (phase < 0.13) {
       ctx.fillStyle = C_NT;
       ctx.fillText('vesicles fuse → neurotransmitters released into the synapse', 480, 60);
-    } else if (phase < 0.55) {
+    } else if (phase < 0.45) {
+      ctx.fillStyle = C_NT;
+      ctx.fillText('the neurotransmitters float across the cleft as a group →', 580, 60);
+    } else if (phase < 0.62) {
       ctx.fillStyle = C_PROT;
       ctx.fillText('NTs bind receptors (ball-in-socket) → Na⁺ floods IN', 600, 60);
-    } else if (phase < 0.65) {
+    } else if (phase < 0.70) {
       ctx.fillStyle = '#ffd166';
       ctx.fillText('Na⁺ becomes the new electrical signal →', POST_MEM_X + 220, 60);
     } else {
@@ -1980,8 +2018,8 @@ const sceneReleaseBindFire = {
 const sceneReuptake = {
   phase: 'Step 5: Reuptake & Cleanup',
   phaseColor: '#5eead4',
-  notes: "Once the message is passed, the synapse has to <strong>reset</strong>. The brain has two ways to do this. <strong>Reuptake transporters</strong> vacuum NTs back into the terminal so they can be repackaged into vesicles and used again. <strong>Enzymes</strong> in the synapse also help clean up by <strong>degrading leftover NTs</strong>, breaking them down so they no longer signal. Without reuptake AND enzymes, NTs would build up forever and never stop firing.",
-  notebook: "Draw both cleanup tools: <strong>transporters</strong> pulling NTs back in to be repackaged, AND <strong>enzymes</strong> (Pac-Man) chomping leftover NTs. Label: <strong>REUPTAKE</strong> and <strong>DEGRADATION</strong>. Two ways to reset the synapse.",
+  notes: "Once the message is passed, the synapse has to <strong>reset</strong>. The brain uses two cleanup tools. <strong>Reuptake transporters</strong> on the presynaptic membrane vacuum NTs back into the terminal so they can be repackaged into vesicles. <strong>Enzymes</strong> (the Pac-Man looking things) drift through the synapse and <strong>chomp leftover NTs</strong> that the transporters miss, breaking them down so they no longer signal. Without both, NTs would build up forever and never stop firing.",
+  notebook: "Draw both cleanup tools: <strong>transporters</strong> pulling NTs back in to be repackaged, AND <strong>enzymes</strong> (the Pac-Man looking things) chomping leftover NTs that escape. Label: <strong>REUPTAKE</strong> and <strong>DEGRADATION</strong>.",
   setup() {
     clearField();
     const nts = [];
@@ -2004,11 +2042,12 @@ const sceneReuptake = {
       assigned: 0    // count of NTs heading to this vesicle
     }));
     const transporters = TRANS_YS.map(y => ({ y, busy: false, busyT: 0 }));
-    // enzymes — Pac-Man degraders drifting in the cleft
+    // enzymes — Pac-Man degraders rising up through the cleft from below
     const enzymes = [
-      new Enzyme(770, 250),
-      new Enzyme(820, 330),
-      new Enzyme(780, 410)
+      new Enzyme(810, ACT_BOT - 10, { rising: true }),
+      new Enzyme(840, ACT_BOT + 30, { rising: true }),
+      new Enzyme(820, ACT_BOT + 80, { rising: true }),
+      new Enzyme(860, ACT_BOT + 130, { rising: true })
     ];
     sceneLocal = { nts, vesicles, transporters, enzymes, time: 0 };
   },
@@ -3215,24 +3254,13 @@ const sceneSSRI = {
     ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, W, H);
 
-    // Header banner
-    ctx.save();
-    ctx.font = '700 11px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(125, 211, 252, 0.7)';
-    ctx.textAlign = 'center';
-    ctx.fillText('CASE STUDY · TREATING DEPRESSION & ANXIETY', W / 2, 24);
-    ctx.font = '500 12px -apple-system, system-ui';
-    ctx.fillStyle = 'rgba(220, 220, 230, 0.7)';
-    ctx.fillText('two drug classes, two different mechanisms, both raise serotonin', W / 2, 44);
-    ctx.restore();
-
     // Vertical divider
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.10)';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 6]);
     ctx.beginPath();
-    ctx.moveTo(W / 2, 70); ctx.lineTo(W / 2, H - 90);
+    ctx.moveTo(W / 2, 30); ctx.lineTo(W / 2, H - 90);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
@@ -3242,17 +3270,17 @@ const sceneSSRI = {
     ctx.fillStyle = C_SSRI;
     ctx.font = '900 22px -apple-system, system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('SSRI', W / 4, 80);
+    ctx.fillText('SSRI', W / 4, 30);
     ctx.font = '500 12px -apple-system, system-ui';
     ctx.fillStyle = 'rgba(125, 211, 252, 0.85)';
-    ctx.fillText('blocks the REUPTAKE TRANSPORTER', W / 4, 100);
+    ctx.fillText('blocks the REUPTAKE TRANSPORTER', W / 4, 50);
     ctx.font = '600 12px -apple-system, system-ui';
     ctx.fillStyle = 'rgba(245, 245, 245, 0.82)';
-    ctx.fillText('Zoloft · Prozac · Paxil · Lexapro · Celexa', W / 4, 120);
+    ctx.fillText('Zoloft · Prozac · Paxil · Lexapro · Celexa', W / 4, 70);
     ctx.restore();
     // animation, scaled and translated to left half
     ctx.save();
-    ctx.translate(0, 145);
+    ctx.translate(0, 95);
     ctx.scale(0.5, 0.5);
     drawCaseSide(ctx, sceneLocal.ssri, t, false);
     ctx.restore();
@@ -3262,17 +3290,17 @@ const sceneSSRI = {
     ctx.fillStyle = '#fb923c';
     ctx.font = '900 22px -apple-system, system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('MAO INHIBITOR', W * 3 / 4, 80);
+    ctx.fillText('MAO INHIBITOR', W * 3 / 4, 30);
     ctx.font = '500 12px -apple-system, system-ui';
     ctx.fillStyle = 'rgba(251, 146, 60, 0.85)';
-    ctx.fillText('blocks the DEGRADING ENZYME (MAO)', W * 3 / 4, 100);
+    ctx.fillText('blocks the DEGRADING ENZYME (MAO)', W * 3 / 4, 50);
     ctx.font = '600 12px -apple-system, system-ui';
     ctx.fillStyle = 'rgba(245, 245, 245, 0.82)';
-    ctx.fillText('Nardil · Marplan · Parnate · Emsam', W * 3 / 4, 120);
+    ctx.fillText('Nardil · Marplan · Parnate · Emsam', W * 3 / 4, 70);
     ctx.restore();
     // animation
     ctx.save();
-    ctx.translate(W / 2, 145);
+    ctx.translate(W / 2, 95);
     ctx.scale(0.5, 0.5);
     drawCaseSide(ctx, sceneLocal.maoi, t, true);
     ctx.restore();
