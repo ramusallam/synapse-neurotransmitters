@@ -1597,49 +1597,74 @@ const sceneCalcium = {
 };
 
 // =====================================================
-//  SCENE 4: Vesicles release
+//  SCENE 4: Release · Bind · Fire (combined)
 // =====================================================
-const sceneRelease = {
-  phase: 'Step 4: Vesicles Release Neurotransmitters',
+function initReleaseBindFireCycle(state) {
+  state.vesicles = [];
+  const positions = [
+    { x: 380, y: 250, dockY: 240, willDock: false },
+    { x: 460, y: 220, dockY: 240, willDock: true, delay: 0 },
+    { x: 540, y: 270, dockY: 285, willDock: true, delay: 180 },
+    { x: 410, y: 320, dockY: 325, willDock: true, delay: 360 },
+    { x: 500, y: 350, dockY: 365, willDock: true, delay: 540 },
+    { x: 600, y: 310, dockY: 285, willDock: false },
+    { x: 380, y: 400, dockY: 410, willDock: true, delay: 720 },
+    { x: 470, y: 420, dockY: 410, willDock: false },
+    { x: 560, y: 390, dockY: 365, willDock: false },
+    { x: 640, y: 270, dockY: 240, willDock: false },
+    { x: 640, y: 380, dockY: 410, willDock: false }
+  ];
+  positions.forEach(p => {
+    const v = new Vesicle(p.x, p.y);
+    v.willDock = p.willDock;
+    v.dockY = p.dockY;
+    v.delay = p.delay || 0;
+    state.vesicles.push(v);
+  });
+  state.calciums = [];
+  for (let i = 0; i < 10; i++) {
+    const cy = ACT_TOP + 20 + Math.random() * (ACT_BOT - ACT_TOP - 40);
+    const cx = 340 + Math.random() * (PRE_MEM_X - 340 - 30);
+    state.calciums.push(new Calcium(cx, cy, 'inside'));
+  }
+  state.released = new Set();
+  state.nts = [];
+  state.naIons = [];
+  state.sparkles = [];
+  state.boltT = 0;
+  state.ignition = 0;
+  state.receptors.forEach(r => { r.bound = 0; r.target = 0; r.slot = null; });
+}
+
+const sceneReleaseBindFire = {
+  phase: 'Step 4: Release · Bind · Fire',
   phaseColor: '#f472b6',
-  notes: "Calcium binds to the vesicles and tells them to <strong>fuse with the membrane</strong>. The vesicles open and dump their <strong>neurotransmitters into the synapse</strong>. The NTs are now floating free in the cleft, on their way to the receptors.",
-  notebook: "Draw vesicles fusing with the membrane and dumping NTs into the synapse. Label: <strong>exocytosis</strong>.",
+  notes: "Calcium tells the vesicles to <strong>fuse with the membrane</strong> and dump their <strong>neurotransmitters</strong> into the synapse. The NTs drift across and click into <strong>receptors</strong> on the next neuron, like a ball into a socket. Each binding opens an ion channel and <strong>Na⁺ floods IN</strong>. The next neuron depolarizes and a brand new <strong>action potential</strong> takes off down its axon. <strong>The signal has been passed.</strong>",
+  notebook: "Sketch the whole chain: vesicles fusing → NTs released → NTs binding receptors (ball into socket) → Na⁺ flooding IN → new action potential firing down the next neuron. Label every part.",
   setup() {
     clearField();
-    const ves = [];
-    const positions = [
-      { x: 380, y: 250, dockY: 240, willDock: false },
-      { x: 460, y: 220, dockY: 240, willDock: true, delay: 0 },
-      { x: 540, y: 270, dockY: 285, willDock: true, delay: 200 },
-      { x: 410, y: 320, dockY: 325, willDock: true, delay: 400 },
-      { x: 500, y: 350, dockY: 365, willDock: true, delay: 600 },
-      { x: 600, y: 310, dockY: 285, willDock: false },
-      { x: 380, y: 400, dockY: 410, willDock: true, delay: 800 },
-      { x: 470, y: 420, dockY: 410, willDock: false },
-      { x: 560, y: 390, dockY: 365, willDock: false },
-      { x: 640, y: 270, dockY: 240, willDock: false },
-      { x: 640, y: 380, dockY: 410, willDock: false }
-    ];
-    positions.forEach(p => {
-      const v = new Vesicle(p.x, p.y);
-      v.willDock = p.willDock;
-      v.dockY = p.dockY;
-      v.delay = p.delay || 0;
-      ves.push(v);
-    });
-    const ca = [];
-    for (let i = 0; i < 10; i++) {
-      const cy = ACT_TOP + 20 + Math.random() * (ACT_BOT - ACT_TOP - 40);
-      const cx = 340 + Math.random() * (PRE_MEM_X - 340 - 30);
-      ca.push(new Calcium(cx, cy, 'inside'));
-    }
-    sceneLocal = { vesicles: ves, calciums: ca, nts: [], elapsed: 0, released: new Set() };
+    sceneLocal = {
+      receptors: RECEPTOR_YS.map(y => ({ y, bound: 0, target: 0, slot: null })),
+      cycleT: 0,
+      lastPhase: 0
+    };
+    initReleaseBindFireCycle(sceneLocal);
   },
   update(dt) {
-    sceneLocal.elapsed += dt;
+    sceneLocal.cycleT += dt;
+    const cycle = 7000;
+    const phase = (sceneLocal.cycleT % cycle) / cycle;
+
+    // cycle reset
+    if (phase < 0.05 && sceneLocal.lastPhase > 0.7) {
+      initReleaseBindFireCycle(sceneLocal);
+    }
+
+    // RELEASE PHASE — vesicles dock and dump NTs (phase 0 → ~0.18)
     sceneLocal.calciums.forEach(c => c.update(dt));
     sceneLocal.vesicles.forEach((v, i) => {
-      if (v.willDock && v.state === 'rest' && sceneLocal.elapsed > v.delay + 200) {
+      const elapsed = phase * cycle;
+      if (v.willDock && v.state === 'rest' && elapsed > v.delay + 100) {
         v.startDock({ x: PRE_MEM_X - 12, y: v.dockY });
       }
       v.update(dt);
@@ -1653,77 +1678,12 @@ const sceneRelease = {
         }
       }
     });
-    sceneLocal.nts.forEach(n => n.update(dt));
-  },
-  draw(ctx, t) {
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0, 0, W, H);
-    drawPresynapticTerminal(ctx);
-    drawPostsynapticDendrite(ctx);
-    sceneLocal.vesicles.forEach(v => v.draw(ctx));
-    sceneLocal.calciums.forEach(c => c.draw(ctx));
-    sceneLocal.nts.forEach(n => n.draw(ctx));
-    CA_CHANNEL_YS.forEach(y => drawCalciumChannel(ctx, y, 1));
-    TRANS_YS.forEach(y => drawTransporter(ctx, y, 0, t));
-    RECEPTOR_YS.forEach(y => drawReceptor(ctx, y, 0));
 
-    ctx.save();
-    ctx.fillStyle = C_NT;
-    ctx.font = '700 17px -apple-system, system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText('vesicles fuse → neurotransmitters released into the synapse', 480, 60);
-    ctx.restore();
-  }
-};
-
-// =====================================================
-//  SCENE 5: NTs Bind Receptors → Next Neuron Fires
-// =====================================================
-const sceneBindFire = {
-  phase: 'Step 5: Bind & Fire',
-  phaseColor: '#b084ff',
-  notes: "Each <strong>neurotransmitter</strong> is shaped to fit a specific <strong>receptor</strong>, like a ball into a socket. When the NT clicks in, the receptor opens an ion channel and <strong>Na⁺ floods IN</strong> on the postsynaptic side. The next neuron <strong>depolarizes</strong> and a brand new <strong>action potential</strong> takes off down its axon. The signal has been passed.",
-  notebook: "Draw an NT (ball) clicking into a receptor (socket). Show <strong>Na⁺ rushing IN</strong> and a new action potential firing on the next neuron. Label: <strong>signal passed</strong>.",
-  setup() {
-    clearField();
-    const nts = [];
-    for (let i = 0; i < 20; i++) {
-      const y = ACT_TOP + 14 + Math.random() * (ACT_BOT - ACT_TOP - 28);
-      const x = PRE_MEM_X + 20 + Math.random() * (POST_MEM_X - PRE_MEM_X - 40);
-      nts.push(new NT(x, y));
-    }
-    const receptors = RECEPTOR_YS.map(y => ({ y, bound: 0, target: 0, slot: null }));
-    sceneLocal = { nts, receptors, naIons: [], boltT: 0, cycleT: 0, sparkles: [], ignition: 0 };
-  },
-  update(dt) {
-    sceneLocal.cycleT += dt;
-    const cycle = 2800;
-    const phase = (sceneLocal.cycleT % cycle) / cycle;
-    // 0..0.25: Na⁺ accumulates (no bolt). 0.25..0.32: ignition flash. 0.32..0.95: bolt travels.
-    if (phase < 0.25) {
-      sceneLocal.boltT = 0;
-      sceneLocal.ignition = 0;
-    } else if (phase < 0.32) {
-      const f = (phase - 0.25) / 0.07;
-      sceneLocal.boltT = 0;
-      sceneLocal.ignition = 1 - f;
-      // emit Na⁺ accumulation tightly at the active zone face during ignition
-    } else {
-      sceneLocal.boltT = clamp((phase - 0.32) / 0.6, 0, 1);
-      sceneLocal.ignition = Math.max(0, sceneLocal.ignition - dt / 250);
-    }
-    // catch ignition trigger moment
-    if (phase < 0.05 && (sceneLocal.lastPhase || 0) > 0.7) {
-      sceneLocal.ignition = 0;
-    }
-    if (phase >= 0.25 && (sceneLocal.lastPhase || 0) < 0.25) {
-      sceneLocal.ignition = 1;
-    }
-    sceneLocal.lastPhase = phase;
+    // BIND PHASE — receptors lock NTs as they arrive (continuous after release starts)
     sceneLocal.receptors.forEach(r => {
       if (r.slot == null && r.target < 0.5) {
         const candidate = sceneLocal.nts.find(n => n.state === 'free');
-        if (candidate && Math.random() < 0.16) {
+        if (candidate && Math.random() < 0.18) {
           const dest = { x: POST_MEM_X - 10, y: r.y };
           candidate.setTransit(dest, 1.5 / 1000, 'receptor', r);
           r.slot = candidate;
@@ -1745,12 +1705,29 @@ const sceneBindFire = {
     sceneLocal.naIons.forEach(n => { n.x += n.vx; n.y += n.vy; n.life -= 0.005; });
     sceneLocal.naIons = sceneLocal.naIons.filter(n => n.life > 0 && n.x < W);
 
-    if (sceneLocal.boltT < 1 && Math.random() < 0.4) {
-      const tt = sceneLocal.boltT;
-      const x = lerp(POST_MEM_X + 60, W - 30, tt);
+    // FIRE PHASE — ignition flash + bolt travels (phase 0.55 → 1.0)
+    if (phase < 0.55) {
+      sceneLocal.boltT = 0;
+      sceneLocal.ignition = 0;
+    } else if (phase < 0.62) {
+      const f = (phase - 0.55) / 0.07;
+      sceneLocal.boltT = 0;
+      sceneLocal.ignition = 1 - f;
+    } else {
+      sceneLocal.boltT = clamp((phase - 0.62) / 0.32, 0, 1);
+      sceneLocal.ignition = Math.max(0, sceneLocal.ignition - dt / 250);
+    }
+    if (phase >= 0.55 && sceneLocal.lastPhase < 0.55) {
+      sceneLocal.ignition = 1;
+    }
+    sceneLocal.lastPhase = phase;
+
+    // bolt sparkles
+    if (sceneLocal.boltT > 0 && sceneLocal.boltT < 1 && Math.random() < 0.4) {
+      const x = lerp(POST_MEM_X + 60, W - 30, sceneLocal.boltT);
       sceneLocal.sparkles.push({
         x, y: MID + (Math.random() - 0.5) * 12,
-        vx: (Math.random() - 0.5) * 1, vy: (Math.random() - 0.5) * 1,
+        vx: (Math.random() - 0.5), vy: (Math.random() - 0.5),
         life: 1
       });
     }
@@ -1762,9 +1739,11 @@ const sceneBindFire = {
     ctx.fillRect(0, 0, W, H);
     drawPresynapticTerminal(ctx);
     drawPostsynapticDendrite(ctx);
+    sceneLocal.vesicles.forEach(v => v.draw(ctx));
+    sceneLocal.calciums.forEach(c => c.draw(ctx));
     sceneLocal.nts.forEach(n => n.draw(ctx));
     sceneLocal.receptors.forEach(r => drawReceptor(ctx, r.y, r.bound));
-    CA_CHANNEL_YS.forEach(y => drawCalciumChannel(ctx, y, 0.4));
+    CA_CHANNEL_YS.forEach(y => drawCalciumChannel(ctx, y, 1));
     TRANS_YS.forEach(y => drawTransporter(ctx, y, 0, t));
 
     sceneLocal.naIons.forEach(n => {
@@ -1784,7 +1763,7 @@ const sceneBindFire = {
       ctx.restore();
     });
 
-    // ignition flash at active zone — the moment Na⁺ becomes the new electrical signal
+    // ignition flash at active zone — Na⁺ becomes the new electrical signal
     if (sceneLocal.ignition > 0) {
       ctx.save();
       const f = sceneLocal.ignition;
@@ -1797,7 +1776,6 @@ const sceneBindFire = {
       g.addColorStop(1, 'rgba(255, 209, 102, 0)');
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(fx, fy, r, 0, Math.PI * 2); ctx.fill();
-      // bright core
       ctx.fillStyle = `rgba(255, 255, 240, ${f * 0.9})`;
       ctx.beginPath(); ctx.arc(fx, fy, 12 * f, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
@@ -1806,15 +1784,18 @@ const sceneBindFire = {
     // new action potential bolt traveling on postsynaptic side
     drawLightningBolt(ctx, POST_MEM_X + 60, W - 30, MID, sceneLocal.boltT, sceneLocal.sparkles);
 
-    // staged header text
+    // staged header text — narrates the chain in three beats
     ctx.save();
     ctx.font = '700 16px -apple-system, system-ui';
     ctx.textAlign = 'center';
-    const phase = (sceneLocal.cycleT % 2800) / 2800;
-    if (phase < 0.25) {
-      ctx.fillStyle = C_NA;
-      ctx.fillText('NTs lock into receptors → Na⁺ floods IN', POST_MEM_X + 200, 60);
-    } else if (phase < 0.4) {
+    const phase = (sceneLocal.cycleT % 7000) / 7000;
+    if (phase < 0.20) {
+      ctx.fillStyle = C_NT;
+      ctx.fillText('vesicles fuse → neurotransmitters released into the synapse', 480, 60);
+    } else if (phase < 0.55) {
+      ctx.fillStyle = C_PROT;
+      ctx.fillText('NTs bind receptors (ball-in-socket) → Na⁺ floods IN', 600, 60);
+    } else if (phase < 0.65) {
       ctx.fillStyle = '#ffd166';
       ctx.fillText('Na⁺ becomes the new electrical signal →', POST_MEM_X + 220, 60);
     } else {
@@ -1829,7 +1810,7 @@ const sceneBindFire = {
 //  SCENE 6: Reuptake
 // =====================================================
 const sceneReuptake = {
-  phase: 'Step 6: Reuptake',
+  phase: 'Step 5: Reuptake',
   phaseColor: '#5eead4',
   notes: "Once the message is passed, the synapse needs to <strong>reset</strong>. <strong>Reuptake transporters</strong> on the presynaptic membrane <strong>vacuum the leftover neurotransmitters back into the terminal</strong>. The NTs are then <strong>repackaged into vesicles</strong> so they can be used again. Without reuptake, NTs would build up forever and never stop signaling.",
   notebook: "Draw transporters <strong>vacuuming NTs back IN</strong> to the terminal, then watch each NT load INTO an empty vesicle. Label: <strong>REUPTAKE → REPACKAGED</strong>. The same NTs get used over and over.",
@@ -2069,7 +2050,7 @@ const sceneZoomOut = {
 //  SCENE 8: Interactive — add/remove NTs
 // =====================================================
 const sceneInteractive = {
-  phase: 'Step 7: Try It · More or Fewer NTs?',
+  phase: 'Step 6: Try It · More or Fewer NTs?',
   phaseColor: '#f472b6',
   isInteractive: true,
   notes: "<strong>Click + Add NTs to flood the cleft.</strong> Watch the next neuron fire faster. <strong>Click − Remove NTs to drain it.</strong> Watch firing slow down. <strong>More NTs = more bound receptors = faster firing.</strong> This is why NT levels matter so much for how your brain feels and behaves.",
@@ -2371,7 +2352,7 @@ function drawPlasticityPanel(ctx, x, y, w, h, accent, num, title, desc, drawAnim
 }
 
 const sceneNeuroplasticity = {
-  phase: 'Step 10: Neuroplasticity',
+  phase: 'Step 9: Neuroplasticity',
   phaseColor: '#a855f7',
   notes: "<strong>Neuroplasticity</strong> is the brain's ability to change by <strong>building, strengthening, weakening, or speeding up</strong> connections between neurons. None of this would be possible without synapses connecting many neurons together. <strong>This is the ultimate hope message.</strong> You can learn. You can change your thinking. You can grow. People recover from addiction. People rebuild after injury. Your reality is not fixed because your brain is not fixed.",
   notebook: "Copy all four kinds of neuroplasticity into your notes. Then write: <strong>my brain can change.</strong> Pick one habit, skill, or thought pattern you want to grow, and circle it as your neuroplasticity goal.",
@@ -2702,7 +2683,7 @@ function panelMyelinate(ctx, px, py, pw, ph, time) {
 //  SCENE 10: Common Neurotransmitters
 // =====================================================
 const sceneCommonNTs = {
-  phase: 'Step 8: Common Neurotransmitters',
+  phase: 'Step 7: Common Neurotransmitters',
   phaseColor: '#a855f7',
   notes: "Same machinery, different chemicals. The neurotransmitter you release decides what the signal <em>does</em>. <strong>Dopamine</strong> drives motivation and reward. <strong>Serotonin</strong> stabilizes mood. <strong>Endorphins</strong> dull pain and create a natural high. <strong>Glutamate</strong> is the brain's GO signal. <strong>GABA</strong> is the brain's STOP signal. <strong>Acetylcholine</strong> moves muscles and sharpens attention.",
   notebook: "List all six neurotransmitters and the main job of each. Star one you have heard about before. These are the ones we will keep coming back to.",
@@ -2826,10 +2807,10 @@ const sceneCommonNTs = {
 //  SCENE 11: SSRIs / Zoloft
 // =====================================================
 const sceneSSRI = {
-  phase: 'Step 9: Case Study · Medicine',
+  phase: 'Step 8: Case Study · Medicine',
   phaseColor: '#7dd3fc',
-  notes: "<strong>Case study time.</strong> Now that you understand the synapse, let's look at one whole class of medicine: <strong>SSRIs · Selective Serotonin Reuptake Inhibitors</strong>. Common ones include <strong>Zoloft, Prozac, Paxil, Lexapro, and Celexa</strong>. They all do the same thing: target the <strong>serotonin transporters</strong> on the presynaptic membrane and <strong>block them</strong>. Important: <strong>they do NOT make MORE serotonin.</strong> They just stop the reuptake, so the serotonin you already release stays in the synapse <strong>longer</strong> and binds receptors longer. That is how SSRIs help with depression and anxiety.",
-  notebook: "Write: <strong>SSRI = Selective Serotonin Reuptake Inhibitor.</strong> List at least three SSRI brand names from the screen. Then explain in one sentence: SSRIs do NOT make more serotonin — they just keep what you already have around longer.",
+  notes: "<strong>SSRIs</strong> are medications used to treat <strong>depression and anxiety</strong> by altering <strong>serotonin levels</strong> in the synapse. Common ones include <strong>Zoloft, Prozac, Paxil, Lexapro, and Celexa</strong>. They all work the same way. <strong>SSRIs do NOT make more serotonin.</strong> They keep the serotonin you already have around longer by <strong>blocking the transporter</strong> on the presynaptic neuron, which stops reuptake. The serotonin lingers in the synapse, binds receptors longer, and the mood signal lasts longer.",
+  notebook: "Write: <strong>SSRI = Selective Serotonin Reuptake Inhibitor.</strong> List at least three SSRI brand names. Then explain: SSRIs treat depression and anxiety by blocking the transporter, which keeps serotonin in the synapse longer.",
   setup() {
     clearField();
     const nts = [];
@@ -3028,13 +3009,12 @@ const scenes = [
   sceneNeuron,         // 1
   sceneSynapse,        // 2
   sceneCalcium,        // 3
-  sceneRelease,        // 4
-  sceneBindFire,       // 5
-  sceneReuptake,       // 6
-  sceneInteractive,    // 7
-  sceneCommonNTs,      // 8
-  sceneSSRI,           // 9
-  sceneNeuroplasticity // 10
+  sceneReleaseBindFire,// 4 (combined release + bind + fire)
+  sceneReuptake,       // 5
+  sceneInteractive,    // 6
+  sceneCommonNTs,      // 7
+  sceneSSRI,           // 8
+  sceneNeuroplasticity // 9
 ];
 
 // =====================================================
