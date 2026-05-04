@@ -2662,16 +2662,40 @@ const sceneNeuroplasticity = {
     // Header — title only
     ctx.save();
     ctx.fillStyle = 'rgba(245, 245, 245, 0.95)';
-    ctx.font = '900 30px -apple-system, system-ui';
+    ctx.font = '900 28px -apple-system, system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText('NEUROPLASTICITY', W / 2, 44);
+    ctx.fillText('NEUROPLASTICITY', W / 2, 36);
     ctx.restore();
 
     // 2×2 grid of panels
-    const pw = 750, ph = 240, gap = 22;
+    const pw = 750, ph = 220, gap = 22;
     const sx = (W - pw * 2 - gap) / 2;
-    const sy = 70;
+    const sy = 110;
+
+    // Column headers above each column
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+
+    // LEFT column — SYNAPTOGENESIS
+    const leftCx = sx + pw / 2;
+    ctx.fillStyle = '#22c55e';
+    ctx.font = '900 20px -apple-system, system-ui';
+    ctx.fillText('SYNAPTOGENESIS', leftCx, 75);
+    ctx.fillStyle = 'rgba(220, 230, 220, 0.65)';
+    ctx.font = '500 12px -apple-system, system-ui';
+    ctx.fillText('making and breaking connections', leftCx, 93);
+
+    // RIGHT column — LTP
+    const rightCx = sx + pw + gap + pw / 2;
+    ctx.fillStyle = '#a855f7';
+    ctx.font = '900 20px -apple-system, system-ui';
+    ctx.fillText('LTP', rightCx, 75);
+    ctx.fillStyle = 'rgba(225, 220, 235, 0.65)';
+    ctx.font = '500 12px -apple-system, system-ui';
+    ctx.fillText('long-term potentiation · strengthening or weakening connections', rightCx, 93);
+    ctx.restore();
 
     // Panel 1 — BUILD
     drawPlasticityPanel(ctx, sx, sy, pw, ph, '#22c55e', '01', 'BUILD',
