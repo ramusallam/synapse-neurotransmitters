@@ -31,7 +31,8 @@
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
     background: var(--bg-0);
     color: var(--ink-hi);
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -58,9 +59,34 @@
     letter-spacing: 1px;
   }
   main {
-    max-width: 1200px;
+    max-width: 1320px;
     margin: 0 auto;
-    padding: 0 32px 20px;
+    padding: 0 32px 16px;
+    height: calc(100vh - 60px);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .workspace {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(340px, 1fr);
+    gap: 20px;
+    align-items: stretch;
+    min-height: 0;
+  }
+  .workspace > .stage { align-self: start; }
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+  }
+  .side .content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin-top: 0;
   }
   .handbook-banner {
     margin: 0 auto 14px;
@@ -235,6 +261,13 @@
   }
   button.primary:hover { filter: brightness(1.08); }
   .btn-group { display: flex; gap: 10px; }
+  @media (max-width: 920px) {
+    html, body { height: auto; overflow: auto; }
+    main { height: auto; padding-bottom: 24px; }
+    .workspace { grid-template-columns: 1fr; }
+    .side .content { overflow-y: visible; }
+    .workspace > .stage { align-self: stretch; }
+  }
   @media (max-width: 720px) {
     .phase-bar { grid-template-columns: 1fr; }
     .sim-controls { justify-content: space-between; }
@@ -249,36 +282,40 @@
 </header>
 
 <main>
-  <div class="stage">
-    <canvas id="canvas" width="1600" height="650"></canvas>
-    <div class="phase-bar">
-      <div class="phase-name" id="phaseName">Step 1</div>
-      <div class="sim-controls" id="simControls">
-        <button class="sim-btn minus" id="ntMinusBtn">− Remove NTs</button>
-        <button class="sim-btn" id="ntPlusBtn">+ Add NTs</button>
-        <div class="sim-readout" id="simReadout">NTs in cleft: <strong>20</strong></div>
+  <div class="workspace">
+    <div class="stage">
+      <canvas id="canvas" width="1600" height="650"></canvas>
+      <div class="phase-bar">
+        <div class="phase-name" id="phaseName">Step 1</div>
+        <div class="sim-controls" id="simControls">
+          <button class="sim-btn minus" id="ntMinusBtn">− Remove NTs</button>
+          <button class="sim-btn" id="ntPlusBtn">+ Add NTs</button>
+          <div class="sim-readout" id="simReadout">NTs in cleft: <strong>20</strong></div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="content">
-    <div class="notes-card">
-      <div class="step-heading" id="stepHeading">Step 1</div>
-      <p id="notes"></p>
-    </div>
-    <div class="notebook-prompt" id="notebookPrompt">
-      <div class="np-tag">✎ NOTES</div>
-      <div id="notebookText"></div>
+    <div class="side">
+      <div class="content">
+        <div class="notes-card">
+          <div class="step-heading" id="stepHeading">Step 1</div>
+          <p id="notes"></p>
+        </div>
+        <div class="notebook-prompt" id="notebookPrompt">
+          <div class="np-tag">✎ NOTES</div>
+          <div id="notebookText"></div>
+        </div>
+      </div>
+
+      <nav>
+        <button id="resetBtn">Start Over</button>
+        <div class="btn-group">
+          <button id="prevBtn">← Back</button>
+          <button id="nextBtn" class="primary">Next →</button>
+        </div>
+      </nav>
     </div>
   </div>
-
-  <nav>
-    <button id="resetBtn">Start Over</button>
-    <div class="btn-group">
-      <button id="prevBtn">← Back</button>
-      <button id="nextBtn" class="primary">Next →</button>
-    </div>
-  </nav>
 </main>
 
 <script>
