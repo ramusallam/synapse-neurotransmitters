@@ -65,26 +65,26 @@
     height: calc(100vh - 60px);
     display: flex;
     flex-direction: column;
+    justify-content: center;
     min-height: 0;
   }
   .workspace {
-    flex: 1;
+    width: 100%;
     display: grid;
-    grid-template-columns: minmax(0, 1.55fr) minmax(340px, 1fr);
-    gap: 20px;
-    align-items: stretch;
+    grid-template-columns: minmax(0, 1.6fr) minmax(330px, 0.95fr);
+    gap: 24px;
+    align-items: center;
     min-height: 0;
   }
-  .workspace > .stage { align-self: start; }
   .side {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
     min-height: 0;
   }
   .side .content {
-    flex: 1;
     min-height: 0;
+    max-height: 100%;
     overflow-y: auto;
     margin-top: 0;
   }
@@ -263,10 +263,9 @@
   .btn-group { display: flex; gap: 10px; }
   @media (max-width: 920px) {
     html, body { height: auto; overflow: auto; }
-    main { height: auto; padding-bottom: 24px; }
-    .workspace { grid-template-columns: 1fr; }
-    .side .content { overflow-y: visible; }
-    .workspace > .stage { align-self: stretch; }
+    main { height: auto; padding-bottom: 24px; justify-content: flex-start; }
+    .workspace { grid-template-columns: 1fr; align-items: stretch; }
+    .side .content { overflow-y: visible; max-height: none; }
   }
   @media (max-width: 720px) {
     .phase-bar { grid-template-columns: 1fr; }
