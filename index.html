@@ -31,8 +31,7 @@
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
     background: var(--bg-0);
     color: var(--ink-hi);
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -62,11 +61,10 @@
     max-width: 1320px;
     margin: 0 auto;
     padding: 0 32px 16px;
-    height: calc(100vh - 60px);
+    min-height: calc(100vh - 60px);
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    min-height: 0;
+    justify-content: safe center;
   }
   .workspace {
     width: 100%;
@@ -74,18 +72,13 @@
     grid-template-columns: minmax(0, 1.6fr) minmax(330px, 0.95fr);
     gap: 24px;
     align-items: center;
-    min-height: 0;
   }
   .side {
     display: flex;
     flex-direction: column;
     gap: 14px;
-    min-height: 0;
   }
   .side .content {
-    min-height: 0;
-    max-height: 100%;
-    overflow-y: auto;
     margin-top: 0;
   }
   .handbook-banner {
@@ -262,10 +255,8 @@
   button.primary:hover { filter: brightness(1.08); }
   .btn-group { display: flex; gap: 10px; }
   @media (max-width: 920px) {
-    html, body { height: auto; overflow: auto; }
-    main { height: auto; padding-bottom: 24px; justify-content: flex-start; }
+    main { min-height: 0; padding-bottom: 24px; justify-content: flex-start; }
     .workspace { grid-template-columns: 1fr; align-items: stretch; }
-    .side .content { overflow-y: visible; max-height: none; }
   }
   @media (max-width: 720px) {
     .phase-bar { grid-template-columns: 1fr; }
